@@ -19,14 +19,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // suppressHydrationWarning: the theme toggle (Phase 4) sets the class on
-  // <html> before React hydrates, which would otherwise mismatch.
+  // className="dark": dark is the default (section 8). The Phase 4 toggle
+  // removes the class rather than adding one.
+  // suppressHydrationWarning: that toggle writes to <html> before React
+  // hydrates, which would otherwise report a mismatch.
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className="min-h-dvh">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-foreground"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
         >
           Skip to content
         </a>

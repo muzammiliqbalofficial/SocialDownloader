@@ -1,47 +1,97 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
 
-/* Dark is the default (section 8); the light palette is applied by the
-   toggle adding .light to <html>. */
+/* shadcn/ui convention: dark styles activate under a `.dark` ancestor. The app
+   renders <html class="dark"> by default (section 8 wants dark by default);
+   the Phase 4 toggle removes the class rather than adding one. */
+@custom-variant dark (&:is(.dark *));
+
+/* Light palette. Tailwind 4 is CSS-first -- there is no tailwind.config.ts. */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.02 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 264);
+  --primary: oklch(0.58 0.16 240);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 264);
+  --secondary-foreground: oklch(0.28 0.02 264);
+  --muted: oklch(0.96 0.005 264);
+  --muted-foreground: oklch(0.53 0.015 264);
+  --accent: oklch(0.96 0.005 264);
+  --accent-foreground: oklch(0.28 0.02 264);
+  --destructive: oklch(0.58 0.21 27);
+  --success: oklch(0.6 0.14 155);
+  --border: oklch(0.92 0.005 264);
+  --input: oklch(0.92 0.005 264);
+  --ring: oklch(0.58 0.16 240);
+}
+
+.dark {
+  --background: oklch(0.19 0.015 264);
+  --foreground: oklch(0.97 0.003 264);
+  --card: oklch(0.23 0.017 264);
+  --card-foreground: oklch(0.97 0.003 264);
+  --popover: oklch(0.23 0.017 264);
+  --popover-foreground: oklch(0.97 0.003 264);
+  --primary: oklch(0.72 0.14 235);
+  --primary-foreground: oklch(0.19 0.015 264);
+  --secondary: oklch(0.27 0.017 264);
+  --secondary-foreground: oklch(0.97 0.003 264);
+  --muted: oklch(0.27 0.017 264);
+  --muted-foreground: oklch(0.71 0.014 264);
+  --accent: oklch(0.29 0.02 264);
+  --accent-foreground: oklch(0.97 0.003 264);
+  --destructive: oklch(0.68 0.18 22);
+  --success: oklch(0.7 0.14 158);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.72 0.14 235);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
 @layer base {
-  :root {
-    --background: 222 24% 7%;
-    --foreground: 210 20% 96%;
-    --muted: 220 16% 14%;
-    --muted-foreground: 217 12% 62%;
-    --border: 220 14% 20%;
-    --accent: 199 89% 55%;
-    --accent-foreground: 222 47% 8%;
-    --danger: 358 72% 62%;
-    --success: 152 58% 48%;
-  }
-
-  .light {
-    --background: 0 0% 100%;
-    --foreground: 222 30% 12%;
-    --muted: 220 16% 96%;
-    --muted-foreground: 220 10% 42%;
-    --border: 220 14% 88%;
-    --accent: 199 89% 42%;
-    --accent-foreground: 0 0% 100%;
-    --danger: 358 68% 48%;
-    --success: 152 58% 34%;
-  }
-
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04";
   }
 
   /* A visible focus ring on every interactive element -- keyboard navigation
      is a requirement, not a nicety (section 8). */
   :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 

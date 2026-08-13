@@ -11,6 +11,10 @@ The download itself is the commodity part. The extraction layer is the product.
 > — that section describes reality, not intent, and is updated at the end of
 > each phase.
 
+**[`docs/BRIEF.md`](docs/BRIEF.md) is the source of truth** for requirements,
+architecture decisions and the decision log. Read it before changing anything
+structural; amend it in the same commit as any new decision.
+
 ---
 
 ## Quick start
@@ -81,6 +85,10 @@ platform expansion beyond YouTube, all Tier 2 extraction features, the AI
 layer, and the compliance pages. **No platform is supported yet** — the
 capability matrix below is the target, not the current state.
 
+Frontend stack is Next.js 16 (App Router), React 19, Tailwind 4 and shadcn/ui,
+with TypeScript held at 5.9.x — see decision D-007 in the brief for why that
+one is deliberately not the newest major.
+
 ### Target capability matrix
 
 Each row will be marked with what actually works as its phase lands.
@@ -91,9 +99,11 @@ Each row will be marked with what actually works as its phase lands.
 | Instagram | Planned        | ✓p    | ✓p           | Caption + hashtags | Partial  | Public reels/posts/carousels. Stories need cookies — best-effort |
 | Facebook  | Planned        | ✓p    | ✓p           | Post text          | Partial  | Public videos and reels only                     |
 | LinkedIn  | Planned        | ✓p    | ✓p           | Full post text     | Partial  | Native video only; **fragile** — `og:` tags first, Playwright fallback |
-| Snapchat  | Spotlight only | ✓p    | ✓p           | Limited            | Minimal  | Stories are not reliably accessible               |
+| Snapchat  | Spotlight only | ✓p    | ✓p           | Limited            | Minimal  | Stories not reliably accessible; **ships disabled** behind an env var |
 
-`✓p` = planned. Nothing in this table is implemented as of Phase 1.
+`✓p` = planned. Nothing in this table is implemented as of Phase 1. When
+Snapchat is disabled it is omitted from the capability registry entirely, so no
+greyed-out or failing tab appears in the UI.
 
 ---
 
@@ -156,6 +166,11 @@ Three layers, per the brief:
 - **Live** — marked `live` and excluded from CI. This is the canary for
   platform breakage and is *expected* to fail periodically.
 
+A weekly scheduled workflow (`.github/workflows/ytdlp-canary.yml`) bumps
+`yt-dlp` to latest, runs the live suite, and opens a PR on success or files an
+issue on failure. `yt-dlp` breaking after a platform change is the single most
+likely cause of a production outage here, so noticing it is automated.
+
 ---
 
 ## Legal considerations
@@ -210,6 +225,8 @@ constraints above reduce risk; they do not eliminate it.
 ## Repository layout
 
 ```
+docs/
+  BRIEF.md        requirements, decisions and the decision log
 backend/
   app/
     api/          routes: health, errors (analyze, jobs, download to come)

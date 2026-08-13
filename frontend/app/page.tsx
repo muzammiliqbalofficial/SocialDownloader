@@ -20,7 +20,7 @@ function StatusDot({ ok }: { ok: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-success" : "bg-danger"}`}
+      className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-success" : "bg-destructive"}`}
     />
   );
 }
