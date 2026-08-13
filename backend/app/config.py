@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     # Downloaded media must not outlive this (section 2.5).
     media_ttl_seconds: int = 900
     download_token_ttl_seconds: int = 900
+    # How long a stored object is retained after its token spends (D-016).
+    # Coverage is fed by bytes written to the ASGI send channel, and those are
+    # not bytes the client received -- uvicorn's socket buffer and Cloud Run's
+    # frontend proxy both accept bytes in flight, so a client dropping near the
+    # end can produce complete coverage while missing the tail. This window is
+    # what absorbs that overcounting. It can shorten an object's life but never
+    # extend it past the TTL above.
+    download_grace_seconds: int = 180
     job_timeout_seconds: int = 600
     max_filesize_mb: int = 2048
     # Above this the download endpoint hands out a signed URL instead of

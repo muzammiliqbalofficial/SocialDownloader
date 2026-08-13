@@ -25,10 +25,13 @@ the TTL. There is no "consumed" boolean; there are three states:
 | --- | --- | --- |
 | `ready` | Issued, never streamed | Stream it |
 | `streaming` | At least one transfer started, none completed | Stream it again (resume or restart) |
-| `spent` | The client demonstrably has the whole object | Nothing; 404 `CONTENT_REMOVED` |
+| `spent` | Coverage complete; object retained for the grace window | Stream it again until grace expires, then 404 `CONTENT_REMOVED` |
+| `issued_signed` | A signed URL was handed out | Nothing. No streaming, no spend, TTL only (section G) |
 
 `streaming` is the important addition. **The token is marked in-use, not
 spent.** Retries are permitted for the whole TTL.
+
+`spent` does **not** mean "delete now" — see the grace window below.
 
 ### Record
 
@@ -84,17 +87,52 @@ TTL sweeper reclaims it. The user keeps their file and we pay for a few more
 minutes of storage, which is the right way round. A corrupt or unparseable
 record fails the same way.
 
-Only after spending is the stored object deleted. Deleting a user's object
-while they hold an incomplete copy is unrecoverable from the client's side and
-is the worst failure this service can have; coverage is therefore treated as a
-correctness invariant, not an optimisation.
+### The assumption coverage does *not* prove — and the grace window
+
+State this plainly rather than letting it be inferred:
+
+> **Coverage measures bytes written to the ASGI send channel. Those are not
+> bytes the client received.** uvicorn's socket buffer and Cloud Run's frontend
+> proxy both accept bytes in flight. A client that drops near the end can
+> therefore produce a complete `[0, size)` record while never seeing the tail.
+
+The interval arithmetic is exact; **its input is optimistic**, and no amount of
+interval precision fixes that. Coverage is evidence of delivery, not proof of
+receipt.
+
+Spend is therefore decoupled from deletion:
+
+- Spending marks the token `spent` and closes it to fresh use.
+- The object is **retained for a grace window** (`DOWNLOAD_GRACE_SECONDS`,
+  default 3 minutes) after spend. During it, the same token may stream again.
+- A re-stream inside the window starts from **empty coverage** — a fresh
+  accounting — and counts against the attempts cap like any other transfer.
+- `spent_at` is set once and never advanced. Otherwise a client could hold an
+  object open indefinitely by re-fetching, and the 15-minute guarantee would be
+  advisory.
+- **Deletion happens at grace expiry or TTL, whichever is first.** The TTL is a
+  hard ceiling (constraint 5), so grace can shorten an object's life but never
+  extend it.
+
+The grace window is what absorbs the buffer overcounting. It is a mitigation
+sized by judgement, not a proof — three minutes is long enough for a client to
+notice a truncated file and retry, and short enough to stay well inside the
+TTL.
+
+Deleting a user's object while they hold an incomplete copy is unrecoverable
+from the client's side and is the worst failure this service can have. Every
+ambiguous case therefore resolves towards retention.
+
+Implemented and tested in `app/services/download_token.py`
+(`tests/test_download_token.py`, 25 tests).
 
 ### Interruption
 
 A dropped connection surfaces as the response generator being closed early.
-The handler catches it, leaves the state at `streaming`, records the partial
-`delivered` count, and does **not** delete the object. The next request with
-the same token resumes.
+The handler catches it, leaves the state at `streaming`, records the interval
+that was actually written (via `CoverageLedger`, which tracks bytes emitted
+rather than bytes promised), and does **not** delete the object. The next
+request with the same token resumes.
 
 ### Abuse bounds
 
@@ -121,12 +159,23 @@ Coverage arithmetic — **done**, in `tests/test_byte_coverage.py` (32 tests):
 - Corrupt or absent record → fails closed.
 - Interrupted response records only bytes actually written, not promised.
 
+Token lifecycle — **done**, in `tests/test_download_token.py` (25 tests):
+
+- Coverage completes → spends; object survives the grace window; re-stream
+  inside the window succeeds with a reset coverage record; object gone after
+  the window.
+- Re-streaming never moves the deletion deadline.
+- TTL caps the grace window when spend happens late.
+- Partial delivery does not spend; resume across two attempts spends once.
+- Attempts cap, expiry, and a refused verdict rejected by `begin_attempt`.
+- A signed token cannot reach `spent` even when handed a full-coverage record,
+  refuses `record_delivery` loudly, and is not streamable.
+
 Endpoint behaviour — Phase 3:
 
 - Interrupted stream → token still usable, object still present.
-- Resume via Range across two requests → coverage completes, token spends,
-  object deleted, byte-identical reconstruction.
-- Replay after spend → 404 `CONTENT_REMOVED`.
+- Resume via Range across two requests → byte-identical reconstruction.
+- Replay after grace expiry → 404 `CONTENT_REMOVED`.
 - Attempt cap → 429.
 - TTL expiry mid-retry → 404, object swept.
 
@@ -298,3 +347,30 @@ is only now being brought up for the first time is the wrong sequencing.
 The GCS path is covered in the shared suite with a mocked client, and verified
 for real against an actual bucket in staging. Recorded as D-014 so it does not
 get quietly reintroduced.
+
+## G. The signed-URL path has no spend semantics
+
+Not an omission to be filled in later — a property of the path. Above the
+threshold GCS serves the bytes directly. We never see them, so there is no
+observation that could complete coverage, and none that could spend a token.
+
+**Coverage is an artifact of proxying, and the signed-URL path is precisely the
+one that does not proxy.** Anyone attempting to unify the two delivery paths
+later should start here.
+
+Made explicit in the model rather than left to inference:
+
+- Such tokens are `Delivery.SIGNED`, state `issued_signed`, which is terminal.
+- `maybe_spend()` returns unchanged for them — even when handed a record that
+  claims full coverage, so a bug elsewhere cannot spend one by accident.
+- `record_delivery()` **raises**. Silently ignoring it would let a future
+  caller believe it was tracking something.
+- `can_stream()` refuses with `INTERNAL_ERROR`: the endpoint redirects rather
+  than streams, so reaching that call is a programming error, not a user one.
+- **Deletion is by TTL alone.** The grace window does not apply, because there
+  is nothing to be graceful about — we never learn whether the transfer
+  happened at all.
+
+The consequence is accepted: a large object occupies storage for the full 15
+minutes even if the client downloaded it in ten seconds. That is the price of
+not proxying, and it is bounded by the same TTL as everything else.

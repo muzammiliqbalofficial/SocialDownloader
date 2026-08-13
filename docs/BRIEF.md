@@ -659,3 +659,63 @@ sees the traffic. Mitigations:
 For two minutes, anyone holding it can fetch the object. That is inherent to
 the mechanism, and it is why signed URLs are the exception above 200 MB rather
 than the default delivery path (D-001).
+
+### D-016 — Spend is decoupled from deletion by a grace window
+
+**Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
+
+D-013 made completion an exact interval calculation. It did not make the
+*input* exact, and that distinction was missed on the first pass.
+
+`ByteCoverage` is fed by bytes written to the ASGI send channel. **Those are
+not bytes the client received.** uvicorn's socket buffer and Cloud Run's
+frontend proxy both accept bytes in flight, so a client dropping near the end
+can produce a complete `[0, size)` record while never seeing the tail — and we
+would delete the object. The interval arithmetic is right; its input is
+optimistic, and no amount of interval precision fixes that.
+
+So spending no longer implies deletion:
+
+- Spend closes the token to fresh use, as before.
+- The object is retained for `DOWNLOAD_GRACE_SECONDS` (default 180) after
+  spend. During the window the same token may stream again, starting from
+  empty coverage and counting against the attempts cap of 10.
+- `spent_at` is set once and never advanced, so re-streaming cannot hold an
+  object open indefinitely.
+- Deletion occurs at grace expiry or TTL, whichever is first. The TTL stays a
+  hard ceiling (constraint 5): grace can shorten an object's life, never
+  extend it.
+
+**The assumption is stated rather than implied:** coverage is evidence that
+bytes left our process, not proof that they arrived. The grace window is a
+mitigation sized by judgement, not a proof of receipt. We cannot observe client
+receipt at all, and pretending otherwise is what produced the original bug.
+
+Implemented in `app/services/download_token.py`.
+
+### D-017 — The signed-URL path has no spend semantics, by construction
+
+**Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
+
+Above the streaming threshold, GCS serves the bytes and we never see them.
+There is no observation that could complete coverage, so spend does not exist
+on that path. This is a property of the design, not a gap to be filled later.
+
+**Coverage is an artifact of proxying, and the signed-URL path is exactly the
+one that does not proxy.** Anyone trying to unify the two delivery paths later
+should read this entry first.
+
+Made explicit in the model so it cannot be reached by accident:
+
+- Such tokens are `Delivery.SIGNED`, state `issued_signed`, terminal.
+- `maybe_spend()` returns unchanged even when handed a full-coverage record.
+- `record_delivery()` raises rather than silently ignoring, so a caller that
+  believes it is tracking coverage finds out immediately.
+- `can_stream()` refuses with `INTERNAL_ERROR` — the endpoint redirects, so
+  reaching it is a programming error, not a user-facing one.
+- Deletion is by TTL alone; the grace window does not apply, because there is
+  nothing to be graceful about.
+
+Accepted consequence: a large object occupies storage for the full 15 minutes
+even when the client finished in ten seconds. That is the price of not
+proxying, bounded by the same TTL as everything else.
