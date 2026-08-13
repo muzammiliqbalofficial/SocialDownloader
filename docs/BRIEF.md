@@ -587,3 +587,75 @@ review-the-diff property is worth more than the file's absence.
 
 Revisit if a future Next version puts anything in that block beyond "read the
 bundled docs" — which is precisely the change a committed file makes visible.
+
+### D-013 — Download completion is interval coverage, never a byte count
+
+**Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted after a design bug
+
+The first Phase 3 draft spent a download token when a cumulative `delivered`
+byte counter reached the object size. That is wrong, and the failure is not
+exotic:
+
+> A 5 MB object. A resuming downloader on a flaky mobile connection requests
+> `bytes=0-499999` ten times. Cumulative delivered reaches 5 MB, the condition
+> is satisfied, the token spends and the object is deleted. The client never
+> received a single byte past offset 500000.
+
+**Cumulative bytes are not coverage.** The draft's `bytes=-1` guard caught one
+instance of this, not the class of bug.
+
+Completion is a set-cover question and is now tracked as merged half-open
+intervals (`app/services/byte_coverage.py`). A token spends only when the
+intervals cover `[0, size_bytes)` completely. Repeating a chunk merges into
+what is already recorded and therefore adds nothing; out-of-order ranges that
+genuinely tile the object do complete it; a one-byte hole anywhere prevents
+spending.
+
+The interval list is capped at 64. Exceeding it latches an `overflowed` flag
+and coverage refuses permanently, so the object survives until the TTL sweeper
+reclaims it. A corrupt record fails the same way. Both directions favour the
+user keeping their file over us reclaiming storage.
+
+**Why this is an invariant rather than an optimisation:** deleting a user's
+object while they hold an incomplete copy is unrecoverable from the client's
+side. They cannot request the missing bytes, and the job they paid for is gone.
+It is the worst failure this service can have, and it is worth failing safe in
+every ambiguous case to avoid it.
+
+### D-014 — No `fake-gcs-server` in the dev compose stack
+
+**Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
+
+Proposed so the GCS path could be exercised locally; rejected. Dev uses the
+local volume backend, which cannot sign URLs and therefore falls back to
+proxy-streaming — a genuine behavioural difference that the parametrised
+storage suite asserts rather than hides. Adding another service to a compose
+stack that is only now being brought up for the first time is the wrong
+sequencing.
+
+The GCS backend is covered in the shared suite with a mocked client and
+verified against a real bucket in staging. The limitation is stated plainly: a
+mocked backend proves our call sequence, not Google's behaviour.
+
+Do not reintroduce `fake-gcs-server` without a specific failure it would have
+caught.
+
+### D-015 — Signed-URL egress is budgeted in bytes at issuance
+
+**Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted risk
+
+Once a signed URL is issued, GCS serves the bytes and our per-IP limiter never
+sees the traffic. Mitigations:
+
+- TTL cut from 5 minutes to **2**.
+- The limiter is charged **at issuance for the object's full size**, so a
+  client cannot mint URLs cheaply and fan the egress out elsewhere.
+- A per-IP **daily byte budget** specific to signed-URL issuance, separate from
+  request-count limits. Counts are the wrong unit: ten 2 GB URLs and ten 2 MB
+  URLs are identical under a count limit and three orders of magnitude apart on
+  the bill.
+
+**Residual risk, unfixable on our side:** a signed URL is a bearer token.
+For two minutes, anyone holding it can fetch the object. That is inherent to
+the mechanism, and it is why signed URLs are the exception above 200 MB rather
+than the default delivery path (D-001).

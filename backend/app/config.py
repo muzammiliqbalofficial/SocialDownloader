@@ -54,8 +54,26 @@ class Settings(BaseSettings):
     download_token_ttl_seconds: int = 900
     job_timeout_seconds: int = 600
     max_filesize_mb: int = 2048
-    # Above this the worker hands off to object storage instead of streaming.
+    # Above this the download endpoint hands out a signed URL instead of
+    # proxy-streaming. Decided on the *actual* size measured after the job, not
+    # the analyze-time estimate, so being wrong costs latency and never
+    # success (D-001).
     stream_threshold_mb: int = 200
+    # Deliberately short (D-015): a signed URL is a bearer token, and for its
+    # lifetime anyone holding it can fetch the object. Long enough to start a
+    # download on a slow connection, short enough that a shared link is stale
+    # almost immediately.
+    signed_url_ttl_seconds: int = 120
+    # Per-IP daily budget for signed-URL issuance, charged at issuance for the
+    # object's full size so a client cannot mint cheap URLs and fan the egress
+    # out elsewhere. Bytes rather than request counts: ten 2 GB URLs and ten
+    # 2 MB URLs are identical under a count limit and three orders of magnitude
+    # apart on the bill.
+    signed_url_daily_byte_budget: int = 20 * 1024**3
+    # Retries permitted per download token before it is refused. The backstop
+    # against unbounded egress, since coverage tracking deliberately allows a
+    # dropped transfer to be resumed for the whole TTL (D-013).
+    max_download_attempts: int = 10
     # Transcription input cap (section 5, Tier 3).
     max_transcription_seconds: int = 600
 

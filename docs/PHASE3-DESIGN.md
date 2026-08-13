@@ -34,34 +34,60 @@ spent.** Retries are permitted for the whole TTL.
 
 ```jsonc
 {
-  "job_id":        "uuid",
-  "object_key":    "jobs/<uuid>/output.mp4",
-  "size_bytes":    123456789,   // authoritative, from storage after the job
-  "content_type":  "video/mp4",
-  "filename":      "…",         // Content-Disposition
-  "state":         "ready",
-  "attempts":      0,
-  "delivered":     0            // cumulative bytes across all attempts
+  "job_id":       "uuid",
+  "object_key":   "jobs/<uuid>/output.mp4",
+  "size_bytes":   123456789,   // authoritative, from storage after the job
+  "content_type": "video/mp4",
+  "filename":     "…",         // Content-Disposition
+  "state":        "ready",
+  "attempts":     0,
+  "coverage":     {"i": [[0, 500000]], "o": false}   // delivered byte ranges
 }
 ```
 
 ### What counts as "complete"
 
-The token is spent when the client has provably received the whole object, not
-when a response happens to finish. Two conditions, both required:
+> **Corrected.** An earlier draft of this design spent the token when a
+> cumulative `delivered` byte count reached `size_bytes`. That is wrong.
+> **Cumulative bytes are not coverage.** A resuming downloader on a flaky
+> connection that requests `bytes=0-499999` ten times against a 5 MB object
+> accumulates 5 MB of "delivered" while never receiving a byte past offset
+> 500000 — and the token would have spent and the object been deleted. The
+> `bytes=-1` guard in that draft caught one instance of the bug, not the class.
 
-1. The response ran to completion — the byte count actually written to the
-   client equals what that response promised.
-2. `delivered >= size_bytes`, where `delivered` is `INCRBY`-accumulated across
-   every attempt.
+Completion is a **set-cover** question, so the record tracks **merged intervals**,
+not a scalar. `app/services/byte_coverage.py` implements this and is already
+built and tested; Phase 3 assembles it rather than inventing it.
 
-The cumulative counter is what makes resume work. A client that fetches
-0–50 MB, drops, then resumes 50 MB–end has `delivered == size_bytes` and the
-token spends correctly at the end of the second request. A client that
-requests only the last byte does not, because `delivered` is 1.
+The token spends when both hold:
 
-Only after spending is the stored object deleted. Deleting on first touch is
-exactly the bug this section exists to prevent.
+1. The response ran to completion — the bytes actually written to the client
+   equal what that response promised.
+2. The merged intervals cover `[0, size_bytes)` **completely**.
+
+Properties that fall out of interval tracking:
+
+- Repeating the same chunk adds nothing, because it merges into the interval
+  already recorded.
+- Out-of-order ranges that genuinely tile the object do cover it.
+- A one-byte hole anywhere prevents spending.
+- A suffix range alone cannot spend, for the general reason rather than as a
+  special case.
+- Adjacent intervals coalesce (`[0,5)` + `[5,9)` → `[0,9)`), so an ordinary
+  chunked download stays at exactly one interval.
+
+**Bounded storage, failing safe.** The interval list is capped at 64. A real
+client produces one interval per interruption, so the cap is far past any
+legitimate pattern. If it is exceeded the record latches `overflowed` and
+`covers()` returns `False` **permanently** — the object then survives until the
+TTL sweeper reclaims it. The user keeps their file and we pay for a few more
+minutes of storage, which is the right way round. A corrupt or unparseable
+record fails the same way.
+
+Only after spending is the stored object deleted. Deleting a user's object
+while they hold an incomplete copy is unrecoverable from the client's side and
+is the worst failure this service can have; coverage is therefore treated as a
+correctness invariant, not an optimisation.
 
 ### Interruption
 
@@ -82,10 +108,24 @@ Retries are not unlimited:
 
 ### Tests
 
+Coverage arithmetic — **done**, in `tests/test_byte_coverage.py` (32 tests):
+
+- Repeated first chunk ×10 on a 5 MB object → does **not** spend. Asserted
+  alongside the fact that a naive byte sum *would* have passed, so the
+  distinction cannot be reintroduced by accident.
+- Out-of-order ranges that fully cover → spends.
+- Two contiguous halves → spends exactly once, and stays covered afterwards.
+- One-byte hole, missing head, missing tail, suffix-only → do not spend.
+- Interval cap exceeded → latched, refuses to spend, even if a full range
+  arrives later.
+- Corrupt or absent record → fails closed.
+- Interrupted response records only bytes actually written, not promised.
+
+Endpoint behaviour — Phase 3:
+
 - Interrupted stream → token still usable, object still present.
-- Resume via Range across two requests → `delivered` reaches `size_bytes`,
-  token spends, object deleted.
-- Suffix range alone (`bytes=-1`) → does **not** spend the token.
+- Resume via Range across two requests → coverage completes, token spends,
+  object deleted, byte-identical reconstruction.
 - Replay after spend → 404 `CONTENT_REMOVED`.
 - Attempt cap → 429.
 - TTL expiry mid-retry → 404, object swept.
@@ -202,10 +242,12 @@ then `exists` is `False`; keys containing slashes and unicode; concurrent reads
 of the same key; and zero-byte objects.
 
 Backend-specific behaviour is confined to two tests — `supports_signed_urls`,
-and that a signed URL is time-limited — and everything else is shared. CI runs
-`local` always; `gcs` runs when `GCS_TEST_BUCKET` is configured, and
-`fake-gcs-server` is added to compose so the GCS path is exercised locally
-without a real bucket.
+and that a signed URL is time-limited — and everything else is shared.
+
+CI runs `local` for real and `gcs` against a **mocked client**. No
+`fake-gcs-server` in compose (D-014, section F). The real GCS path is verified
+against an actual bucket in staging, and that gap is stated rather than papered
+over: a mocked backend proves our call sequence, not Google's behaviour.
 
 ---
 
@@ -220,12 +262,39 @@ GET  /api/download/{tok}  -> 200 / 206 / 302-to-signed-URL
 `progress` stays a monotonic int and `status` an enum, per D-002, so SSE can be
 added later without changing the client contract.
 
-## Open questions for Phase 3
+## E. Signed-URL egress
 
-1. **Signed-URL egress is unmetered by our rate limiter.** Once the URL is
-   handed out, GCS serves it directly and our per-IP limits do not apply for
-   its 5-minute life. Mitigation is the short TTL plus the attempt cap; worth
-   confirming that is acceptable before the first deploy.
-2. **`fake-gcs-server` in compose** adds a service to the dev stack. Reasonable,
-   but it is another moving part in a stack that has only just been verified —
-   flagging rather than assuming.
+Once a signed URL is handed out, GCS serves the bytes directly. Our per-IP
+limiter never sees that traffic, and the download endpoint's attempt cap does
+not apply to it.
+
+Accepted risk, with three mitigations:
+
+1. **TTL of 2 minutes**, not 5. Long enough to start a download on a slow
+   connection, short enough that a shared link is stale almost immediately.
+2. **Charge the limiter at issuance, for the object's full size.** A client
+   cannot mint URLs cheaply and fan the egress out across other machines,
+   because the cost is booked when the URL is created rather than when bytes
+   move.
+3. **A per-IP daily byte budget specific to signed-URL issuance**
+   (`SIGNED_URL_DAILY_BYTE_BUDGET`), separate from the request-count limits.
+   Exhausting it returns `RATE_LIMITED`. Request counts are the wrong unit here
+   — ten 2 GB URLs and ten 2 MB URLs are the same under a count limit and three
+   orders of magnitude apart on the bill.
+
+**Residual risk, which cannot be fixed on our side:** a signed URL is a bearer
+token. For its two-minute life anyone holding it can fetch the object, and
+nothing we do server-side changes that — that is what makes it shareable and
+also what makes it cheap. It is the reason signed URLs are the exception above
+200 MB rather than the default delivery path (D-001).
+
+## F. No `fake-gcs-server` in the dev stack
+
+Considered and rejected. Dev uses `LocalVolumeStorage`, which cannot sign and
+therefore falls back to proxy-streaming — a real difference, asserted by the
+parametrised suite rather than hidden. Adding a service to a compose stack that
+is only now being brought up for the first time is the wrong sequencing.
+
+The GCS path is covered in the shared suite with a mocked client, and verified
+for real against an actual bucket in staging. Recorded as D-014 so it does not
+get quietly reintroduced.
