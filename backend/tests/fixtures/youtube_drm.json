@@ -1,0 +1,26 @@
+{
+  "id": "drmExample1",
+  "title": "A DRM-protected rental",
+  "description": "",
+  "uploader": "Some Studio",
+  "upload_date": "20240101",
+  "duration": 5400,
+  "age_limit": 0,
+  "is_live": false,
+  "extractor": "youtube",
+  "thumbnails": [],
+  "subtitles": {},
+  "automatic_captions": {},
+  "formats": [
+    {
+      "format_id": "drm-1080",
+      "ext": "mp4",
+      "vcodec": "avc1.640028",
+      "acodec": "mp4a.40.2",
+      "width": 1920,
+      "height": 1080,
+      "has_drm": true,
+      "protocol": "https"
+    }
+  ]
+}

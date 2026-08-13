@@ -51,7 +51,12 @@ ERROR_CATALOG: dict[ErrorCode, ErrorSpec] = {
     ErrorCode.UNSUPPORTED_PLATFORM: ErrorSpec(
         status=400,
         message="We don't support this site.",
-        action="Supported platforms are YouTube, Instagram, Facebook, LinkedIn and Snapchat.",
+        # Deliberately does not enumerate platforms: this catalog is static,
+        # and a hardcoded list goes stale the moment a platform is disabled or
+        # a phase has not landed. The caller supplies the live list as `detail`
+        # from the registry, so the user is never promised something that does
+        # not work.
+        action="Paste a link from one of the platforms we currently support.",
     ),
     ErrorCode.UNSUPPORTED_CONTENT_TYPE: ErrorSpec(
         status=400,
@@ -143,11 +148,17 @@ class AppError(Exception):
         detail: str | None = None,
         context: dict[str, Any] | None = None,
         cause: BaseException | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.code = code
         self.spec = ERROR_CATALOG[code]
         self.detail = detail
         self.context = context or {}
+        # Applied by the exception handler. Headers set on the endpoint's
+        # injected Response are lost when a handler builds a fresh response,
+        # so anything that must survive a failure (Retry-After, most
+        # importantly) has to travel on the exception itself.
+        self.headers = headers or {}
         super().__init__(f"{code}: {detail or self.spec.message}")
         if cause is not None:
             self.__cause__ = cause

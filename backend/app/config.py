@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # Transcription input cap (section 5, Tier 3).
     max_transcription_seconds: int = 600
 
+    # --- Platform toggles ---
+    # Snapchat ships disabled (decision D-004): Spotlight-only, minimal
+    # metadata, unreliable Stories. When off it is omitted from the capability
+    # registry entirely rather than shown as a failing tab.
+    snapchat_enabled: bool = False
+
+    # --- Extraction ---
+    # Hard ceiling on a single yt-dlp invocation. Analyze should take 2-5s;
+    # anything near this limit means the platform is not answering.
+    extractor_timeout_seconds: int = 45
+
     # --- Optional AI layer. Absent key => capability hidden, endpoint 503. ---
     groq_api_key: str | None = None
     gemini_api_key: str | None = None

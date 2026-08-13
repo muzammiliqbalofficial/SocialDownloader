@@ -42,6 +42,9 @@ async def test_health_reports_ok_when_dependencies_answer(client, monkeypatch):
 
     monkeypatch.setattr(health, "_check_database", ok)
     monkeypatch.setattr(health, "_check_redis", ok)
+    # ffmpeg is not installed in every dev environment; the extractor check is
+    # exercised on its own below.
+    monkeypatch.setattr(health, "_check_extractor", lambda: ComponentHealth(status="ok"))
 
     response = await client.get("/api/health")
     assert response.status_code == 200
@@ -49,6 +52,55 @@ async def test_health_reports_ok_when_dependencies_answer(client, monkeypatch):
 
     ready = await client.get("/api/health/ready")
     assert ready.status_code == 200
+
+
+async def test_readiness_ignores_a_missing_ffmpeg(client, monkeypatch):
+    """A missing ffmpeg costs the merged high-quality formats but leaves every
+    metadata path working. Draining the instance over it would turn a partial
+    degradation into a total outage."""
+    from app.api import health
+    from app.models.schemas import ComponentHealth
+
+    async def ok() -> ComponentHealth:
+        return ComponentHealth(status="ok")
+
+    monkeypatch.setattr(health, "_check_database", ok)
+    monkeypatch.setattr(health, "_check_redis", ok)
+    monkeypatch.setattr(
+        health,
+        "_check_extractor",
+        lambda: ComponentHealth(status="down", detail="ffmpeg is missing"),
+    )
+
+    ready = await client.get("/api/health/ready")
+    assert ready.status_code == 200
+
+    # ...but /health still tells the whole truth.
+    body = (await client.get("/api/health")).json()
+    assert body["status"] == "degraded"
+    assert body["components"]["extractor"]["status"] == "down"
+
+
+async def test_extractor_component_reports_the_pinned_ytdlp_version(monkeypatch):
+    """A stale pin is the likeliest cause of extraction failures, so the
+    version belongs where an operator will see it."""
+    from app.api.health import _check_extractor
+
+    monkeypatch.setattr("app.extractors.ytdlp_adapter.ffmpeg_available", lambda: True)
+    component = _check_extractor()
+    assert component.status == "ok"
+    assert "yt-dlp" in (component.detail or "")
+
+
+async def test_extractor_component_flags_missing_ffmpeg(monkeypatch):
+    """Without ffmpeg the best formats silently disappear from the picker, so
+    this must be loud rather than invisible."""
+    from app.api.health import _check_extractor
+
+    monkeypatch.setattr("app.extractors.ytdlp_adapter.ffmpeg_available", lambda: False)
+    component = _check_extractor()
+    assert component.status == "down"
+    assert "ffmpeg" in (component.detail or "")
 
 
 async def test_every_response_carries_a_request_id(client):

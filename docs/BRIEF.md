@@ -9,7 +9,7 @@ If a conversation and this document disagree, this document wins. If you make a
 new decision, amend the relevant section here and add a log entry in the same
 commit.
 
-Last amended: 2026-08-13 (end of Phase 1).
+Last amended: 2026-08-13 (end of Phase 2).
 
 ---
 
@@ -323,8 +323,10 @@ the next begins.
 1. **Skeleton** ✅ — docker-compose brings the full stack online. Health
    endpoint, config loading, structured logging, Alembic baseline, CI-ready
    pytest.
-2. **Analyze pipeline** — platform registry, yt-dlp adapter, `/api/analyze`
-   end to end for YouTube only. Full error taxonomy wired.
+2. **Analyze pipeline** ✅ — platform registry, yt-dlp adapter, `/api/analyze`
+   end to end for YouTube only. Full error taxonomy wired. Per-IP rate limiting
+   landed here rather than in Phase 3, because constraint 6 says day one and
+   analyze is the expensive unauthenticated endpoint.
 3. **Download pipeline** — job queue, worker, storage abstraction, streaming
    download endpoint, single-use tokens, TTL cleanup, per-IP rate limiting.
    Video and audio for YouTube.
@@ -478,3 +480,42 @@ token.
 scheduled weekly workflow bumps it to latest, runs the `live` suite, and opens
 a PR on success or an issue on failure — an automated canary rather than
 someone noticing that downloads stopped working.
+
+### D-010 — `/api/analyze` runs yt-dlp as a subprocess from the API process
+
+**Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted (engineer's call)
+
+§6 says `/api/analyze` is fast and synchronous (2–5s) *and* that every yt-dlp
+invocation runs in the worker, never in the API request path. Taken literally
+those conflict: routing analyze through the job queue would make it
+asynchronous and cost a poll round-trip on the most latency-sensitive call in
+the product.
+
+Read the constraint as being about **blast radius, not process identity**. The
+danger is unbounded, unkillable work inside the web process. So analyze spawns
+`python -m yt_dlp` as a child process, awaited with `asyncio.wait_for`, and on
+expiry the whole process *group* is killed (yt-dlp spawns ffmpeg; killing only
+the parent orphans it). The event loop never blocks, the work is bounded and
+kill-able, and yt-dlp's global state stays out of our address space.
+
+Downloads remain worker-only, as specified — that is where the long-running,
+disk-touching work happens.
+
+If analyze latency or instance CPU becomes a problem on Cloud Run, the fix is
+to move analyze behind the queue and accept the round-trip, not to run yt-dlp
+in-process.
+
+### D-011 — Error messages never enumerate platforms
+
+**Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted
+
+The `UNSUPPORTED_PLATFORM` catalog entry originally read "Supported platforms
+are YouTube, Instagram, Facebook, LinkedIn and Snapchat." With only YouTube
+implemented and Snapchat disabled, that message was false, and it would go
+stale again every time a platform was toggled.
+
+The static catalog entry no longer names platforms. The live list is derived
+from the registry (`supported_platform_names`) and passed as the error
+`detail`, so a user is never told we support something that does not work.
+This is §13's "every capability shown in the UI actually works" applied to
+error copy, which is otherwise easy to overlook.

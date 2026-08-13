@@ -6,7 +6,8 @@ resolution, subtitles, metadata, transcripts and AI summaries.
 
 The download itself is the commodity part. The extraction layer is the product.
 
-> **Status: Phase 1 of 8 (skeleton).** Nothing is downloadable yet. See
+> **Status: Phase 2 of 8 (analyze pipeline).** URLs can be analyzed; nothing is
+> downloadable yet — the job queue and download endpoint land in Phase 3. See
 > [Implementation status](#implementation-status) for what actually works today
 > — that section describes reality, not intent, and is updated at the end of
 > each phase.
@@ -42,9 +43,19 @@ schema.
 
 Useful endpoints while developing:
 
-- http://localhost:8000/api/health — component-level status
+- http://localhost:8000/api/health — component-level status, including the
+  pinned yt-dlp version and whether ffmpeg is present
+- http://localhost:8000/api/registry — the capability matrix the UI renders from
 - http://localhost:8000/api/errors — the full error taxonomy
 - http://localhost:8000/docs — OpenAPI (disabled in production)
+
+Analyze a URL:
+
+```bash
+curl -X POST http://localhost:8000/api/analyze \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=aqz-KE-bpKQ"}'
+```
 
 Run `make help` for the common tasks.
 
@@ -78,12 +89,27 @@ cd frontend && npm install && npm run dev
 - TTL sweeper deleting expired scratch media every two minutes
 - 103 backend tests (89% coverage), CI on GitHub Actions
 
+### Phase 2 — analyze pipeline ✅
+
+- `POST /api/analyze` works end to end for YouTube (videos and Shorts):
+  formats, thumbnails at every resolution, manual and auto-generated subtitle
+  tracks, chapters, metadata, and description text parsed into hashtags and
+  mentions
+- Data-driven capability registry at `app/platforms/registry.py`, exposed on
+  `GET /api/registry`. All five platforms have specs; only YouTube is marked
+  implemented, and disabled platforms are omitted from the response entirely
+- yt-dlp behind a single adapter, run as a killable subprocess under a hard
+  timeout, with stderr mapped onto the error taxonomy
+- Per-IP rate limiting on `/api/analyze` (constraint 6 says day one)
+- DRM, live streams and age-gated content are refused before anything else
+  happens
+
 ### Not built yet
 
-Phases 2–8: URL analysis, the platform registry, downloads, the frontend flow,
-platform expansion beyond YouTube, all Tier 2 extraction features, the AI
-layer, and the compliance pages. **No platform is supported yet** — the
-capability matrix below is the target, not the current state.
+Phases 3–8: the job queue and download pipeline, the frontend flow, platform
+expansion beyond YouTube, the remaining Tier 2 features, the AI layer, and the
+compliance pages. **Only YouTube is supported today** — the capability matrix
+below is the target, not the current state.
 
 Frontend stack is Next.js 16 (App Router), React 19, Tailwind 4 and shadcn/ui,
 with TypeScript held at 5.9.x — see decision D-007 in the brief for why that

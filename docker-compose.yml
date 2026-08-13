@@ -10,6 +10,10 @@ x-backend-env: &backend-env
   IP_HASH_SALT: ${IP_HASH_SALT:-local-dev-only-salt}
   TMP_DIR: /tmp/socialdl
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  SNAPCHAT_ENABLED: ${SNAPCHAT_ENABLED:-false}
+  EXTRACTOR_TIMEOUT_SECONDS: ${EXTRACTOR_TIMEOUT_SECONDS:-45}
+  RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-10}
+  RATE_LIMIT_PER_DAY: ${RATE_LIMIT_PER_DAY:-200}
   # Absent by default: the AI layer stays off until keys are supplied.
   GROQ_API_KEY: ${GROQ_API_KEY:-}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}

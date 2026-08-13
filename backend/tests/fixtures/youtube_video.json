@@ -1,0 +1,139 @@
+{
+  "id": "aqz-KE-bpKQ",
+  "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Film",
+  "description": "Big Buck Bunny is an open source animated short.\n\nMade with #Blender by the @BlenderFoundation team.\nMore at #OpenMovie and #b3d — see also @peach.project.\n\nChapters below.",
+  "uploader": "Blender Foundation",
+  "uploader_url": "https://www.youtube.com/@BlenderFoundation",
+  "channel": "Blender Foundation",
+  "channel_url": "https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg",
+  "upload_date": "20141110",
+  "timestamp": 1415577600,
+  "duration": 635,
+  "view_count": 12345678,
+  "like_count": 98765,
+  "comment_count": 4321,
+  "age_limit": 0,
+  "is_live": false,
+  "live_status": "not_live",
+  "width": 3840,
+  "height": 2160,
+  "webpage_url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  "extractor": "youtube",
+  "_has_drm": false,
+  "chapters": [
+    { "start_time": 0.0, "end_time": 45.0, "title": "Intro" },
+    { "start_time": 45.0, "end_time": 300.0, "title": "The meadow" },
+    { "start_time": 300.0, "end_time": 635.0, "title": "Revenge" }
+  ],
+  "thumbnails": [
+    { "id": "default", "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/default.jpg", "width": 120, "height": 90 },
+    { "id": "mqdefault", "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/mqdefault.jpg", "width": 320, "height": 180 },
+    { "id": "hqdefault", "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg", "width": 480, "height": 360 },
+    { "id": "sddefault", "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/sddefault.jpg", "width": 640, "height": 480 },
+    { "id": "maxresdefault", "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg", "width": 1920, "height": 1080 }
+  ],
+  "thumbnail": "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg",
+  "subtitles": {
+    "en": [
+      { "ext": "vtt", "url": "https://example.invalid/en.vtt", "name": "English" },
+      { "ext": "srv3", "url": "https://example.invalid/en.srv3", "name": "English" }
+    ],
+    "nl": [
+      { "ext": "vtt", "url": "https://example.invalid/nl.vtt", "name": "Dutch" }
+    ]
+  },
+  "automatic_captions": {
+    "en": [
+      { "ext": "vtt", "url": "https://example.invalid/en-auto.vtt", "name": "English (auto-generated)" }
+    ],
+    "de": [
+      { "ext": "vtt", "url": "https://example.invalid/de-auto.vtt", "name": "German (auto-generated)" }
+    ]
+  },
+  "formats": [
+    {
+      "format_id": "sb0",
+      "format_note": "storyboard",
+      "ext": "mhtml",
+      "vcodec": "none",
+      "acodec": "none",
+      "width": 160,
+      "height": 90
+    },
+    {
+      "format_id": "139",
+      "ext": "m4a",
+      "format_note": "low",
+      "vcodec": "none",
+      "acodec": "mp4a.40.5",
+      "abr": 48.0,
+      "tbr": 49.2,
+      "filesize": 3901234,
+      "protocol": "https"
+    },
+    {
+      "format_id": "140",
+      "ext": "m4a",
+      "format_note": "medium",
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "abr": 128.0,
+      "tbr": 129.5,
+      "filesize": 10256789,
+      "protocol": "https"
+    },
+    {
+      "format_id": "251",
+      "ext": "webm",
+      "format_note": "medium",
+      "vcodec": "none",
+      "acodec": "opus",
+      "abr": 160.0,
+      "tbr": 152.3,
+      "filesize_approx": 12000000,
+      "protocol": "https"
+    },
+    {
+      "format_id": "137",
+      "ext": "mp4",
+      "format_note": "1080p",
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "tbr": 4500.0,
+      "filesize": 356789012,
+      "dynamic_range": "SDR",
+      "protocol": "https"
+    },
+    {
+      "format_id": "313",
+      "ext": "webm",
+      "format_note": "2160p",
+      "vcodec": "vp9",
+      "acodec": "none",
+      "width": 3840,
+      "height": 2160,
+      "fps": 60,
+      "tbr": 20000.0,
+      "filesize_approx": 1500000000,
+      "dynamic_range": "SDR",
+      "protocol": "https"
+    },
+    {
+      "format_id": "18",
+      "ext": "mp4",
+      "format_note": "360p",
+      "vcodec": "avc1.42001E",
+      "acodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "tbr": 696.0,
+      "abr": 96.0,
+      "filesize": 55123456,
+      "protocol": "https"
+    }
+  ]
+}

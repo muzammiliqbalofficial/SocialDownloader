@@ -54,8 +54,40 @@ async def _check_redis() -> ComponentHealth:
     )
 
 
+def _check_extractor() -> ComponentHealth:
+    """Reports the pinned yt-dlp version and whether ffmpeg is present.
+
+    A stale pin is the most common cause of extraction failures, and a missing
+    ffmpeg silently removes the best formats from the picker, so both belong
+    where an operator will actually see them.
+    """
+    from app.extractors.ytdlp_adapter import ffmpeg_available, ytdlp_version
+
+    version = ytdlp_version()
+    if version is None:
+        return ComponentHealth(status="down", detail="yt-dlp is not importable")
+    if not ffmpeg_available():
+        return ComponentHealth(
+            status="down", detail=f"yt-dlp {version}, but ffmpeg is missing"
+        )
+    return ComponentHealth(status="ok", detail=f"yt-dlp {version}")
+
+
 async def _collect() -> dict[str, ComponentHealth]:
-    return {"database": await _check_database(), "redis": await _check_redis()}
+    return {
+        "database": await _check_database(),
+        "redis": await _check_redis(),
+        "extractor": _check_extractor(),
+    }
+
+
+# Components whose failure means this instance genuinely cannot serve requests,
+# and so should be pulled from rotation. The extractor check is deliberately
+# excluded: a missing ffmpeg costs us the merged high-quality formats, which is
+# worth shouting about on /health, but analyze and every metadata path still
+# work. Draining the instance over it would turn a partial degradation into a
+# total outage.
+READINESS_CRITICAL = ("database", "redis")
 
 
 @router.get("/health/live", summary="Liveness probe")
@@ -79,12 +111,16 @@ async def health() -> HealthResponse:
 @router.get("/health/ready", response_model=HealthResponse, summary="Readiness probe")
 async def ready(response: Response) -> HealthResponse:
     result = await health()
-    if result.status != "ok":
+
+    unready = [
+        name
+        for name in READINESS_CRITICAL
+        if result.components.get(name, ComponentHealth(status="unknown")).status != "ok"
+    ]
+    if unready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        _log.warning(
-            "health.not_ready",
-            components={k: v.status for k, v in result.components.items()},
-        )
+        _log.warning("health.not_ready", failing=unready)
+
     return result
 
 

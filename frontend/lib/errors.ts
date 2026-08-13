@@ -37,7 +37,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorSpec> = {
   },
   UNSUPPORTED_PLATFORM: {
     message: "We don't support this site.",
-    action: "Supported platforms are YouTube, Instagram, Facebook, LinkedIn and Snapchat.",
+    action: "Paste a link from one of the platforms we currently support.",
     retryable: false,
     status: 400,
   },

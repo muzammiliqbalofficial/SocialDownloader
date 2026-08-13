@@ -28,3 +28,10 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "T20"]
 [tool.ruff.lint.per-file-ignores]
 "scripts/*" = ["T20"]
 "alembic/*" = ["E501"]
+# ASYNC109 wants callers to wrap in a timeout context instead of taking a
+# `timeout` argument. That is wrong for the extractor: the value has to reach
+# asyncio.wait_for so the subprocess *group* can be killed on expiry. A
+# caller-side timeout would cancel the await and leave yt-dlp running.
+"app/extractors/ytdlp_adapter.py" = ["ASYNC109"]
+# Test stubs must mirror the signature of the function they replace.
+"tests/*" = ["ASYNC109"]

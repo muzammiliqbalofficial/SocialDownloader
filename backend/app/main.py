@@ -93,7 +93,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         rid = _request_id(request)
         log = _log.error if exc.status_code >= 500 else _log.info
         log("error.app", code=str(exc.code), status=exc.status_code, **exc.context)
-        return JSONResponse(status_code=exc.status_code, content=exc.to_payload(rid))
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_payload(rid),
+            headers=exc.headers or None,
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:

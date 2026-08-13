@@ -135,6 +135,9 @@ async def test_health_reports_ok_against_a_live_database(engine, monkeypatch):
         return ComponentHealth(status="ok")
 
     monkeypatch.setattr(health, "_check_redis", redis_ok)
+    # This test is about the database component; ffmpeg is not installed in
+    # every environment and is covered separately in test_health.py.
+    monkeypatch.setattr(health, "_check_extractor", lambda: ComponentHealth(status="ok"))
 
     settings = Settings(ip_hash_salt="test-salt-value", environment="test")
     transport = httpx.ASGITransport(app=create_app(settings))
