@@ -24,9 +24,13 @@ import json
 import os
 import shutil
 import sys
+import weakref
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
 
+from app.config import get_settings
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import get_logger
 from app.extractors.errors_map import is_recognised, map_stderr
@@ -49,6 +53,72 @@ _MAX_STDERR_BYTES = 64_000
 # --dump-single-json on a long playlist can be enormous. Analyze is
 # single-item, so anything past this is pathological.
 _MAX_STDOUT_BYTES = 32 * 1024 * 1024
+
+# --------------------------------------------------------------------------
+# Concurrency guard
+#
+# Each yt-dlp subprocess costs ~45 MiB RSS at an absolute minimum and more once
+# it parses a large format list. Cloud Run's default container concurrency is
+# 80; eighty simultaneous extractions would be multiple gigabytes and would OOM
+# a 2 GiB instance. No functional test surfaces that, so the bound is enforced
+# here rather than left to deployment configuration alone.
+#
+# The semaphore is per event loop rather than a module-level singleton: an
+# asyncio primitive binds to the loop that first awaits it, and the test suite
+# runs each test on a fresh loop.
+# --------------------------------------------------------------------------
+
+_slots: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, tuple[int, asyncio.Semaphore]
+] = weakref.WeakKeyDictionary()
+
+# In-flight subprocess count, for the saturation log line. Not a lock -- only
+# ever read for reporting.
+_in_flight = 0
+
+
+def _slots_for(limit: int) -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    cached = _slots.get(loop)
+    if cached is None or cached[0] != limit:
+        semaphore = asyncio.Semaphore(limit)
+        _slots[loop] = (limit, semaphore)
+        return semaphore
+    return cached[1]
+
+
+def in_flight_extractions() -> int:
+    return _in_flight
+
+
+@asynccontextmanager
+async def _extraction_slot(
+    *, limit: int, wait_seconds: float, retry_after: int
+) -> AsyncIterator[None]:
+    """Hold one extraction slot, or fail fast if none frees up in time."""
+    global _in_flight
+    semaphore = _slots_for(limit)
+
+    try:
+        await asyncio.wait_for(semaphore.acquire(), timeout=wait_seconds)
+    except TimeoutError:
+        _log.warning("extractor.saturated", limit=limit, in_flight=_in_flight)
+        raise AppError(
+            ErrorCode.RATE_LIMITED,
+            detail=(
+                "We're extracting as many links as this server can handle at once. "
+                "Try again in a few seconds."
+            ),
+            context={"reason": "extractor_saturated", "limit": limit},
+            headers={"Retry-After": str(retry_after)},
+        ) from None
+
+    _in_flight += 1
+    try:
+        yield
+    finally:
+        _in_flight -= 1
+        semaphore.release()
 
 
 def _base_command(cache_dir: str) -> list[str]:
@@ -120,12 +190,20 @@ async def fetch_info(url: str, *, timeout: int) -> dict[str, Any]:
 
     Raises AppError mapped into the taxonomy on any failure.
     """
-    cache_dir = os.path.join(os.getenv("TMP_DIR", "/tmp/socialdl"), "yt-dlp-cache")
+    settings = get_settings()
+    cache_dir = os.path.join(settings.tmp_dir, "yt-dlp-cache")
     os.makedirs(cache_dir, exist_ok=True)
 
     args = [*_base_command(cache_dir), "--dump-single-json", "--skip-download", "--", url]
 
-    returncode, stdout, stderr = await _run(args, timeout=timeout)
+    # The slot is held only around the subprocess itself: that is where the
+    # memory lives. JSON parsing afterwards is our own process and cheap.
+    async with _extraction_slot(
+        limit=settings.max_concurrent_extractions,
+        wait_seconds=settings.extraction_queue_wait_seconds,
+        retry_after=settings.extraction_busy_retry_after_seconds,
+    ):
+        returncode, stdout, stderr = await _run(args, timeout=timeout)
     stderr_text = stderr[:_MAX_STDERR_BYTES].decode("utf-8", errors="replace")
 
     if returncode != 0:

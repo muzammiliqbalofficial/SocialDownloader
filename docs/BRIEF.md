@@ -505,6 +505,34 @@ If analyze latency or instance CPU becomes a problem on Cloud Run, the fix is
 to move analyze behind the queue and accept the round-trip, not to run yt-dlp
 in-process.
 
+**Amended: the subprocess must be bounded.** Approving the design without a
+concurrency cap would have shipped a guaranteed OOM. Each subprocess is a
+separate OS process whose resident memory is charged to the container:
+
+| Figure | Value | Source |
+| --- | --- | --- |
+| Floor | **45 MiB** | Measured `ru_maxrss` of the child on Python 3.11 with the network blocked, so it exits before parsing a format list — interpreter plus yt-dlp imports and nothing more. |
+| Budget | **80 MiB** | Floor plus headroom for a real extraction: a large `formats` array, TLS buffers, and the JSON document held in memory while it is written to stdout. |
+
+Cloud Run's default `containerConcurrency` is 80. At 80 MiB each that is
+**~6.4 GiB** of concurrent extraction on an instance we would plausibly pay
+1–2 GiB for. No functional test surfaces it, because every test issues one
+request at a time.
+
+So `MAX_CONCURRENT_EXTRACTIONS` (default 4) gates the subprocess behind an
+`asyncio.Semaphore`, held only around the child process itself. A caller that
+waits longer than `EXTRACTION_QUEUE_WAIT_SECONDS` (2s) gets `429 RATE_LIMITED`
+with `Retry-After` rather than joining an unbounded queue: a fast honest
+rejection beats a request that dies at the load balancer.
+
+The bound lives in the application, not only in deployment config, so it holds
+however the service is run. `containerConcurrency` is set explicitly to 8 —
+**it must not exceed `MAX_CONCURRENT_EXTRACTIONS` by more than about 2x**, the
+multiple being the queue depth behind the semaphore. Full arithmetic in
+`deploy/cloudrun/README.md`; the in-process half is pinned by
+`tests/test_extractor_concurrency.py`, which fires 20 concurrent calls and
+asserts observed peak concurrency never exceeds the limit.
+
 ### D-011 — Error messages never enumerate platforms
 
 **Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted
@@ -519,3 +547,43 @@ from the registry (`supported_platform_names`) and passed as the error
 `detail`, so a user is never told we support something that does not work.
 This is §13's "every capability shown in the UI actually works" applied to
 error copy, which is otherwise easy to overlook.
+
+### D-012 — Next.js `AGENTS.md` / `CLAUDE.md` stay committed
+
+**Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted after review
+
+`next dev` wrote `frontend/AGENTS.md` and `frontend/CLAUDE.md` into the repo.
+They were committed without justification, which is a fair thing to challenge:
+an unattributed file that instructs coding agents is an injection surface.
+
+Provenance was then established from the installed package, not from memory:
+
+- **Generator:** `node_modules/next/dist/server/lib/generate-agent-files.js`
+  builds the block; the shipped source produces our files byte-for-byte,
+  including `CLAUDE.md` being exactly `@AGENTS.md`.
+- **Documentation:** `node_modules/next/dist/docs/01-app/02-guides/ai-agents.md`
+  ("How to set up your Next.js project for AI coding agents"), section
+  *Existing projects*: "On Next.js 16.3 or later, run `next dev`. When an AI
+  coding agent is detected in the environment and no managed block is present,
+  Next.js auto-generates `AGENTS.md` and `CLAUDE.md` at the project root." The
+  page reproduces the exact block text we have, including the line advising
+  that committing it keeps the tree clean.
+- **Trigger:** `start-server.js` logs "Generated … for AI agents. Set
+  `agentRules: false` in next.config to disable."
+- **Scope:** the block only tells an agent to read the version-matched docs
+  bundled in `node_modules`. It grants nothing our dependency does not already
+  have — we execute that package's code on every build.
+
+**Why committed rather than gitignored.** Gitignoring would not remove the
+file. `next dev` recreates it, agents still read it, and changes to it would
+land silently on disk where nobody reviews them. That makes the surface
+invisible, not absent — strictly worse. Committed, any change to the managed
+block arrives as a reviewable diff.
+
+**The actual off switch** is `agentRules: false` in `next.config.mjs`, which
+stops generation entirely. Not taken: the content is verified, the docs are
+genuinely useful given Next 16 postdates most training data, and the
+review-the-diff property is worth more than the file's absence.
+
+Revisit if a future Next version puts anything in that block beyond "read the
+bundled docs" — which is precisely the change a committed file makes visible.

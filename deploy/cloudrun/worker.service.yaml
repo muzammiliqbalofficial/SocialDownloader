@@ -1,0 +1,101 @@
+# Cloud Run service: arq worker.
+#
+# NOT DEPLOYABLE YET. The worker has no HTTP listener, and a Cloud Run service
+# must answer on $PORT within the startup probe window or the revision is
+# rejected. Phase 3 adds a minimal health listener alongside the arq loop; this
+# file is the target shape and is committed now so the API and worker
+# configurations stay reviewable side by side.
+#
+# The alternative shape -- Cloud Run Jobs -- was considered and rejected: arq is
+# a long-lived poller, and Jobs are for work that starts, finishes and exits.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: socialdownloader-worker
+  labels:
+    cloud.googleapis.com/location: REGION_PLACEHOLDER
+  annotations:
+    # No public traffic: the worker pulls from Redis, nothing calls it.
+    run.googleapis.com/ingress: internal
+
+spec:
+  template:
+    metadata:
+      annotations:
+        # Exactly 1: arq polls a shared Redis queue, so several instances are
+        # safe, but nothing here needs the throughput yet and each idle
+        # instance bills continuously because CPU throttling is off below.
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
+
+        # THE important line. With throttling on (the default) Cloud Run
+        # freezes CPU between requests -- and the worker never receives a
+        # request, so it would be frozen permanently: jobs would not run and
+        # the TTL sweeper would not sweep, silently breaking the 15-minute
+        # deletion guarantee. This is what makes the worker cost more than the
+        # API per hour, and it is not optional.
+        run.googleapis.com/cpu-throttling: "false"
+
+    spec:
+      # The worker serves no traffic; arq's own max_jobs governs its
+      # concurrency. This value only satisfies the Cloud Run schema.
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      serviceAccountName: socialdownloader-worker@PROJECT_ID_PLACEHOLDER.iam.gserviceaccount.com
+
+      containers:
+        - name: worker
+          image: REGION_PLACEHOLDER-docker.pkg.dev/PROJECT_ID_PLACEHOLDER/socialdownloader/api:latest
+          command: ["arq"]
+          args: ["app.workers.settings.WorkerSettings"]
+          ports:
+            - name: http1
+              containerPort: 8080
+
+          resources:
+            limits:
+              # Larger than the API: the worker downloads media rather than
+              # just reading metadata, and ffmpeg remuxing is memory-hungry on
+              # top of the subprocess cost. Revisit against real job sizes once
+              # Phase 3 has run.
+              memory: 4Gi
+              cpu: "2"
+
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: LOG_LEVEL
+              value: INFO
+            # arq's max_jobs is 4; keep the extraction bound aligned with it so
+            # four running jobs cannot each spawn beyond their share.
+            - name: MAX_CONCURRENT_EXTRACTIONS
+              value: "4"
+            # Workers wait for a slot rather than rejecting: unlike an HTTP
+            # request there is no user watching, and the job is already queued.
+            - name: EXTRACTION_QUEUE_WAIT_SECONDS
+              value: "120"
+            - name: EXTRACTOR_TIMEOUT_SECONDS
+              value: "300"
+            - name: TMP_DIR
+              value: /tmp/socialdl
+            - name: GCS_BUCKET
+              value: socialdownloader-media-PROJECT_ID_PLACEHOLDER
+            - name: IP_HASH_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-ip-hash-salt
+                  key: latest
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-database-url
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-redis-url
+                  key: latest
+
+  traffic:
+    - percent: 100
+      latestRevision: true

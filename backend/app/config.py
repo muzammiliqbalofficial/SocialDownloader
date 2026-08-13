@@ -70,6 +70,19 @@ class Settings(BaseSettings):
     # anything near this limit means the platform is not answering.
     extractor_timeout_seconds: int = 45
 
+    # Concurrent yt-dlp subprocesses per instance. This is a *memory* bound,
+    # not a throughput knob: each subprocess costs ~45 MiB at minimum (measured
+    # floor) and more on a large format list, so an unbounded count OOMs the
+    # container long before it saturates CPU. Keep container concurrency in
+    # proportion -- see deploy/cloudrun/README.md.
+    max_concurrent_extractions: int = 4
+    # How long a request waits for a free slot before giving up. A fast honest
+    # rejection beats a request that dies at the load balancer's timeout.
+    extraction_queue_wait_seconds: float = 2.0
+    # Retry-After sent when the extractor is saturated. Roughly one typical
+    # extraction, so a client that obeys it arrives when a slot has freed.
+    extraction_busy_retry_after_seconds: int = 5
+
     # --- Optional AI layer. Absent key => capability hidden, endpoint 503. ---
     groq_api_key: str | None = None
     gemini_api_key: str | None = None

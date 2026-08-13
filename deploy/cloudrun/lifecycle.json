@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "Backstop only. The 15-minute deletion guarantee is enforced by the TTL",
+    "sweeper in the worker; GCS lifecycle rules have a minimum granularity of",
+    "one day, so this cannot satisfy the requirement on its own. It exists to",
+    "catch objects orphaned by a worker that died mid-job, and to bound cost",
+    "if the sweeper ever stops running."
+  ],
+  "lifecycle": {
+    "rule": [
+      {
+        "action": { "type": "Delete" },
+        "condition": { "age": 1 }
+      },
+      {
+        "_comment": "Abort resumable uploads abandoned by a killed worker.",
+        "action": { "type": "AbortIncompleteMultipartUpload" },
+        "condition": { "age": 1 }
+      }
+    ]
+  }
+}

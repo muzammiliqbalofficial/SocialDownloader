@@ -1,0 +1,195 @@
+# Cloud Run service: API.
+#
+# Deploy with:
+#   gcloud run services replace deploy/cloudrun/api.service.yaml --region=$REGION
+#
+# Every non-obvious value is justified in a comment. The memory and concurrency
+# figures are derived from a measured per-subprocess cost -- see the arithmetic
+# in deploy/cloudrun/README.md. Do not raise MAX_CONCURRENT_EXTRACTIONS or
+# containerConcurrency without redoing it.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: socialdownloader-api
+  labels:
+    cloud.googleapis.com/location: REGION_PLACEHOLDER
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/description: >-
+      Extraction API for publicly accessible social media content.
+
+spec:
+  template:
+    metadata:
+      annotations:
+        # --- Scaling -------------------------------------------------------
+        # min 1: a cold start is roughly 2-4s for this image, and /api/analyze
+        # promises 2-5s end to end. A cold start would double the worst case
+        # on the product's most latency-sensitive call. One warm instance is
+        # the cheapest way to keep that promise.
+        autoscaling.knative.dev/minScale: "1"
+        # max 10: a cost ceiling, not a capacity estimate. At 8 requests per
+        # instance this is 80 concurrent requests, well past current traffic.
+        # Raising it also raises the floor on Postgres connections -- see the
+        # pool arithmetic below.
+        autoscaling.knative.dev/maxScale: "10"
+
+        # --- CPU -----------------------------------------------------------
+        # Throttling stays ON (the default) for the API: there is no
+        # background work between requests, so paying for always-allocated CPU
+        # would be waste. The worker is the opposite case; see
+        # worker.service.yaml.
+        run.googleapis.com/cpu-throttling: "true"
+        # Startup boost shortens the cold start that min-instances is there to
+        # avoid, and costs nothing once the instance is warm.
+        run.googleapis.com/startup-cpu-boost: "true"
+
+        # --- Networking ----------------------------------------------------
+        # Egress through a connector is only needed to reach a private Cloud
+        # SQL instance or a VPC-internal Redis. Uncomment with a real
+        # connector name when those exist.
+        # run.googleapis.com/vpc-access-connector: socialdownloader-connector
+        # run.googleapis.com/vpc-access-egress: private-ranges-only
+
+    spec:
+      # 8 = 2x MAX_CONCURRENT_EXTRACTIONS. The semaphore in the extractor
+      # bounds memory; this bounds how many requests can be queued behind it.
+      # At 8, four requests extract and at most four wait up to
+      # EXTRACTION_QUEUE_WAIT_SECONDS before being turned away with a 429 and a
+      # Retry-After. Cloud Run's default of 80 would mean 76 requests queuing
+      # for 4 slots, which is a timeout farm, not throughput.
+      containerConcurrency: 8
+
+      # 60s: the extractor's own ceiling is 45s
+      # (EXTRACTOR_TIMEOUT_SECONDS), plus the queue wait plus response
+      # serialisation. The platform request should always lose its own race
+      # first, so that the client gets UPSTREAM_TIMEOUT from us rather than a
+      # bare 504 from the load balancer.
+      timeoutSeconds: 60
+
+      serviceAccountName: socialdownloader-api@PROJECT_ID_PLACEHOLDER.iam.gserviceaccount.com
+
+      containers:
+        - name: api
+          image: REGION_PLACEHOLDER-docker.pkg.dev/PROJECT_ID_PLACEHOLDER/socialdownloader/api:latest
+          ports:
+            # Cloud Run injects $PORT; the container CMD reads it.
+            - name: http1
+              containerPort: 8000
+
+          resources:
+            limits:
+              # 2Gi. Worst case is roughly:
+              #   ~250 MiB  Python + FastAPI + SQLAlchemy + asyncpg baseline
+              #   ~320 MiB  4 concurrent yt-dlp subprocesses at ~80 MiB each
+              #             (45 MiB measured floor; 80 MiB budgeted for a
+              #             large format list)
+              #   ~128 MiB  4 stdout buffers at the 32 MiB parse cap
+              #   = ~700 MiB peak
+              # 2Gi leaves ~2.8x headroom, which matters because Cloud Run
+              # OOM-kills without warning and takes in-flight requests with it.
+              # 1Gi is viable only with MAX_CONCURRENT_EXTRACTIONS reduced to 2.
+              memory: 2Gi
+              # 2 vCPU: extraction is mostly network-bound, but TLS and parsing
+              # a multi-megabyte format list are not. 4 concurrent extractions
+              # on 1 vCPU would serialise on CPU and inflate p99.
+              cpu: "2"
+
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: LOG_LEVEL
+              value: INFO
+
+            # --- The concurrency contract ---------------------------------
+            # This value and containerConcurrency above move together. See
+            # README.md before changing either.
+            - name: MAX_CONCURRENT_EXTRACTIONS
+              value: "4"
+            - name: EXTRACTION_QUEUE_WAIT_SECONDS
+              value: "2.0"
+            - name: EXTRACTION_BUSY_RETRY_AFTER_SECONDS
+              value: "5"
+            - name: EXTRACTOR_TIMEOUT_SECONDS
+              value: "45"
+
+            # --- Per-IP limits --------------------------------------------
+            - name: RATE_LIMIT_PER_MINUTE
+              value: "10"
+            - name: RATE_LIMIT_PER_DAY
+              value: "200"
+
+            # --- Platform toggles -----------------------------------------
+            - name: SNAPCHAT_ENABLED
+              value: "false"
+
+            # --- Storage ---------------------------------------------------
+            # Cloud Run's filesystem is an in-memory tmpfs: anything written to
+            # /tmp is charged against the memory limit above. Only small,
+            # short-lived scratch belongs here; job output goes to GCS.
+            - name: TMP_DIR
+              value: /tmp/socialdl
+            - name: GCS_BUCKET
+              value: socialdownloader-media-PROJECT_ID_PLACEHOLDER
+
+            - name: CORS_ORIGINS
+              value: https://socialdownloader.vercel.app
+
+            # --- Secrets ---------------------------------------------------
+            # Never inline these. IP_HASH_SALT in particular: with it, the
+            # stored ip_hash values are salted; leak it and they become
+            # brute-forceable against the IPv4 space in minutes.
+            - name: IP_HASH_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-ip-hash-salt
+                  key: latest
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-database-url
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-redis-url
+                  key: latest
+            # Absent secrets leave the AI layer switched off, which is the
+            # intended default (constraint: the core downloader never depends
+            # on them).
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-groq-api-key
+                  key: latest
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: socialdownloader-gemini-api-key
+                  key: latest
+
+          startupProbe:
+            # /live touches no dependencies, so a slow Postgres does not stop
+            # the container coming up. Readiness handles that separately.
+            httpGet:
+              path: /api/health/live
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 10
+
+          livenessProbe:
+            # Deliberately /live and not /ready. A liveness probe on readiness
+            # would restart the container whenever Postgres blipped, turning a
+            # dependency outage into a crash loop that makes recovery slower.
+            httpGet:
+              path: /api/health/live
+              port: 8000
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+  traffic:
+    - percent: 100
+      latestRevision: true
