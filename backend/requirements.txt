@@ -1,0 +1,18 @@
+# Runtime dependencies. Pinned exactly: reproducible images are worth more than
+# automatic upgrades. yt-dlp is the exception in spirit -- expect to bump it often,
+# because platform changes break it on a scale of weeks, not months.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+pydantic==2.13.4
+pydantic-settings==2.15.0
+sqlalchemy==2.0.52
+alembic==1.19.1
+asyncpg==0.31.0
+greenlet==3.5.5
+# Held at 5.x: arq 0.28.0 requires redis<6. Bump both together when arq allows it.
+redis==5.3.1
+arq==0.28.0
+structlog==26.1.0
+httpx==0.28.1
+python-multipart==0.0.32
+yt-dlp==2026.7.4

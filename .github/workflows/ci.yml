@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: socialdl
+          POSTGRES_PASSWORD: socialdl
+          POSTGRES_DB: socialdl_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U socialdl"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ENVIRONMENT: test
+      IP_HASH_SALT: ci-salt-value-not-a-secret
+      DATABASE_URL: postgresql+asyncpg://socialdl:socialdl@localhost:5432/socialdl_test
+      TEST_DATABASE_URL: postgresql+asyncpg://socialdl:socialdl@localhost:5432/socialdl_test
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Verify the generated frontend error catalog is current
+        run: python scripts/gen_error_codes.py --check
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      - name: Check models match migrations
+        run: alembic check
+
+      # -m "not live" keeps the canary suite out of CI: it hits real platforms
+      # and is expected to break when they change (section 12).
+      - name: Test
+        run: pytest -m "not live" --cov --cov-report=term-missing --cov-report=xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

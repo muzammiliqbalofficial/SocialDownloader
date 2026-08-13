@@ -1,0 +1,123 @@
+# Local development stack. `cp .env.example .env && docker compose up` is the
+# only setup step (section 13).
+name: socialdownloader
+
+x-backend-env: &backend-env
+  ENVIRONMENT: ${ENVIRONMENT:-local}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-socialdl}:${POSTGRES_PASSWORD:-socialdl}@postgres:5432/${POSTGRES_DB:-socialdl}
+  REDIS_URL: redis://redis:6379/0
+  IP_HASH_SALT: ${IP_HASH_SALT:-local-dev-only-salt}
+  TMP_DIR: /tmp/socialdl
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  # Absent by default: the AI layer stays off until keys are supplied.
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-socialdl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-socialdl}
+      POSTGRES_DB: ${POSTGRES_DB:-socialdl}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-socialdl} -d ${POSTGRES_DB:-socialdl}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # No persistence: everything Redis holds here (queue state, rate-limit
+    # counters, download tokens) is short-lived by design.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Runs migrations to completion, then exits. api and worker wait on it, so
+  # there is no race between a booting app and an unmigrated schema.
+  migrate:
+    build:
+      context: ./backend
+      target: dev
+    environment: *backend-env
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    environment: *backend-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - api-tmp:/tmp/socialdl
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ./backend
+      target: dev
+    environment: *backend-env
+    command: ["arq", "app.workers.settings.WorkerSettings"]
+    volumes:
+      - ./backend:/app
+      - api-tmp:/tmp/socialdl
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      # Keep the image's node_modules; the host directory would shadow it.
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  # Shared so the worker's output is readable by the API's download endpoint.
+  # This is a dev convenience; production uses object storage instead.
+  api-tmp:

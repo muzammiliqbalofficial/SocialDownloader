@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark is the default (section 8); the light palette is applied by the
+   toggle adding .light to <html>. */
+@layer base {
+  :root {
+    --background: 222 24% 7%;
+    --foreground: 210 20% 96%;
+    --muted: 220 16% 14%;
+    --muted-foreground: 217 12% 62%;
+    --border: 220 14% 20%;
+    --accent: 199 89% 55%;
+    --accent-foreground: 222 47% 8%;
+    --danger: 358 72% 62%;
+    --success: 152 58% 48%;
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 30% 12%;
+    --muted: 220 16% 96%;
+    --muted-foreground: 220 10% 42%;
+    --border: 220 14% 88%;
+    --accent: 199 89% 42%;
+    --accent-foreground: 0 0% 100%;
+    --danger: 358 68% 48%;
+    --success: 152 58% 34%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04";
+  }
+
+  /* A visible focus ring on every interactive element -- keyboard navigation
+     is a requirement, not a nicety (section 8). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-background;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
