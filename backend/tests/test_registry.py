@@ -31,7 +31,7 @@ SNAPCHAT_ON = Settings(ip_hash_salt="test-salt-value", snapchat_enabled=True)
         ("https://www.youtube.com/live/aqz-KE-bpKQ", ContentType.VIDEO, "aqz-KE-bpKQ"),
         # Bare paste with no scheme -- extremely common.
         ("youtube.com/watch?v=aqz-KE-bpKQ", ContentType.VIDEO, "aqz-KE-bpKQ"),
-        ("  https://youtu.be/aqz-KE-bpKQ  ", ContentType.VIDEO, "aqz-KE-bpKQ"),
+        (" https://youtu.be/aqz-KE-bpKQ ", ContentType.VIDEO, "aqz-KE-bpKQ"),
     ],
 )
 def test_youtube_urls_are_detected(url, content_type, content_id):
@@ -55,7 +55,7 @@ def test_detection_returns_capabilities_for_the_content_type():
     "url",
     [
         "",
-        "   ",
+        " ",
         "not a url at all",
         "ftp://youtube.com/watch?v=aqz-KE-bpKQ",
         "file:///etc/passwd",

@@ -31,5 +31,5 @@ class UsageDaily(Base):
         Index("ix_usage_daily_day", "day"),
     )
 
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+    def __repr__(self) -> str: # pragma: no cover - debugging aid
         return f"<UsageDaily {self.day} {self.platform}/{self.action}={self.count}>"

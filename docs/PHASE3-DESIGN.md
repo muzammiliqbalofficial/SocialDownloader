@@ -1,4 +1,4 @@
-# Phase 3 design — download pipeline
+# Phase 3 design - download pipeline
 
 Settled before any code is written. Four points were called out as needing a
 decision up front; each is answered here with the failure it is protecting
@@ -14,7 +14,7 @@ single-use tokens, TTL cleanup. Video and audio for YouTube.
 **The failure being avoided.** A token consumed when the stream *starts* means
 a dropped connection costs the user the whole job. On a mobile network that is
 not an edge case, it is Tuesday. They paid the extraction, waited for the job,
-and received nothing — with no way to retry short of running the job again.
+and received nothing - with no way to retry short of running the job again.
 
 ### States
 
@@ -31,20 +31,20 @@ the TTL. There is no "consumed" boolean; there are three states:
 `streaming` is the important addition. **The token is marked in-use, not
 spent.** Retries are permitted for the whole TTL.
 
-`spent` does **not** mean "delete now" — see the grace window below.
+`spent` does **not** mean "delete now" - see the grace window below.
 
 ### Record
 
 ```jsonc
 {
-  "job_id":       "uuid",
-  "object_key":   "jobs/<uuid>/output.mp4",
-  "size_bytes":   123456789,   // authoritative, from storage after the job
+  "job_id": "uuid",
+  "object_key": "jobs/<uuid>/output.mp4",
+  "size_bytes": 123456789, // authoritative, from storage after the job
   "content_type": "video/mp4",
-  "filename":     "…",         // Content-Disposition
-  "state":        "ready",
-  "attempts":     0,
-  "coverage":     {"i": [[0, 500000]], "o": false}   // delivered byte ranges
+  "filename": "…", // Content-Disposition
+  "state": "ready",
+  "attempts": 0,
+  "coverage": {"i": [[0, 500000]], "o": false} // delivered byte ranges
 }
 ```
 
@@ -55,7 +55,7 @@ spent.** Retries are permitted for the whole TTL.
 > **Cumulative bytes are not coverage.** A resuming downloader on a flaky
 > connection that requests `bytes=0-499999` ten times against a 5 MB object
 > accumulates 5 MB of "delivered" while never receiving a byte past offset
-> 500000 — and the token would have spent and the object been deleted. The
+> 500000 - and the token would have spent and the object been deleted. The
 > `bytes=-1` guard in that draft caught one instance of the bug, not the class.
 
 Completion is a **set-cover** question, so the record tracks **merged intervals**,
@@ -64,7 +64,7 @@ built and tested; Phase 3 assembles it rather than inventing it.
 
 The token spends when both hold:
 
-1. The response ran to completion — the bytes actually written to the client
+1. The response ran to completion - the bytes actually written to the client
    equal what that response promised.
 2. The merged intervals cover `[0, size_bytes)` **completely**.
 
@@ -82,12 +82,12 @@ Properties that fall out of interval tracking:
 **Bounded storage, failing safe.** The interval list is capped at 64. A real
 client produces one interval per interruption, so the cap is far past any
 legitimate pattern. If it is exceeded the record latches `overflowed` and
-`covers()` returns `False` **permanently** — the object then survives until the
+`covers()` returns `False` **permanently** - the object then survives until the
 TTL sweeper reclaims it. The user keeps their file and we pay for a few more
 minutes of storage, which is the right way round. A corrupt or unparseable
 record fails the same way.
 
-### The assumption coverage does *not* prove — and the grace window
+### The assumption coverage does *not* prove - and the grace window
 
 State this plainly rather than letting it be inferred:
 
@@ -105,8 +105,8 @@ Spend is therefore decoupled from deletion:
 - Spending marks the token `spent` and closes it to fresh use.
 - The object is **retained for a grace window** (`DOWNLOAD_GRACE_SECONDS`,
   default 3 minutes) after spend. During it, the same token may stream again.
-- A re-stream inside the window starts from **empty coverage** — a fresh
-  accounting — and counts against the attempts cap like any other transfer.
+- A re-stream inside the window starts from **empty coverage** - a fresh
+  accounting - and counts against the attempts cap like any other transfer.
 - `spent_at` is set once and never advanced. Otherwise a client could hold an
   object open indefinitely by re-fetching, and the 15-minute guarantee would be
   advisory.
@@ -115,7 +115,7 @@ Spend is therefore decoupled from deletion:
   extend it.
 
 The grace window is what absorbs the buffer overcounting. It is a mitigation
-sized by judgement, not a proof — three minutes is long enough for a client to
+sized by judgement, not a proof - three minutes is long enough for a client to
 notice a truncated file and retry, and short enough to stay well inside the
 TTL.
 
@@ -146,7 +146,7 @@ Retries are not unlimited:
 
 ### Tests
 
-Coverage arithmetic — **done**, in `tests/test_byte_coverage.py` (32 tests):
+Coverage arithmetic - **done**, in `tests/test_byte_coverage.py` (32 tests):
 
 - Repeated first chunk ×10 on a 5 MB object → does **not** spend. Asserted
   alongside the fact that a naive byte sum *would* have passed, so the
@@ -159,7 +159,7 @@ Coverage arithmetic — **done**, in `tests/test_byte_coverage.py` (32 tests):
 - Corrupt or absent record → fails closed.
 - Interrupted response records only bytes actually written, not promised.
 
-Token lifecycle — **done**, in `tests/test_download_token.py` (25 tests):
+Token lifecycle - **done**, in `tests/test_download_token.py` (25 tests):
 
 - Coverage completes → spends; object survives the grace window; re-stream
   inside the window succeeds with a reset coverage record; object gone after
@@ -171,7 +171,7 @@ Token lifecycle — **done**, in `tests/test_download_token.py` (25 tests):
 - A signed token cannot reach `spent` even when handed a full-coverage record,
   refuses `record_delivery` loudly, and is not streamable.
 
-Endpoint behaviour — Phase 3:
+Endpoint behaviour - Phase 3:
 
 - Interrupted stream → token still usable, object still present.
 - Resume via Range across two requests → byte-identical reconstruction.
@@ -208,7 +208,7 @@ the bytes actually emitted (a mismatch hangs clients).
 
 ---
 
-## C. The 200 MB threshold uses an estimate — what happens when it is wrong
+## C. The 200 MB threshold uses an estimate - what happens when it is wrong
 
 **The failure being avoided.** `yt-dlp` reports `filesize` for some formats and
 `filesize_approx` for others, and both are frequently absent or wrong. A job
@@ -225,7 +225,7 @@ delivery should hinge on a number we already know to be unreliable.
 So the 150 MB → 400 MB case is not an error path at all: the job completes, the
 actual size is measured, 400 MB exceeds `STREAM_THRESHOLD_MB`, and the token
 resolves to a signed URL. The user sees a working download. This is what
-D-001's "cost optimisation, not a correctness boundary" means in practice —
+D-001's "cost optimisation, not a correctness boundary" means in practice -
 both paths are correct for any size, so being wrong about which one to use
 costs latency, never success.
 
@@ -244,7 +244,7 @@ hard cap → `FILESIZE_EXCEEDED` and the object is deleted.
 
 ---
 
-## D. `storage.py` — one contract, two backends, one test suite
+## D. `storage.py` - one contract, two backends, one test suite
 
 **The failure being avoided.** The dev backend is a shared compose volume and
 the prod backend is GCS. If they are tested separately they drift, and the
@@ -255,14 +255,14 @@ drift is discovered in production.
 ```python
 class Storage(Protocol):
     async def put(self, key: str, source: Path | AsyncIterator[bytes],
-                  *, content_type: str) -> int: ...      # returns bytes written
-    async def size(self, key: str) -> int | None: ...    # None when absent
+                  *, content_type: str) -> int: ... # returns bytes written
+    async def size(self, key: str) -> int | None: ... # None when absent
     async def exists(self, key: str) -> bool: ...
     async def open_range(self, key: str, start: int = 0,
                          end: int | None = None) -> AsyncIterator[bytes]: ...
-    async def delete(self, key: str) -> bool: ...        # idempotent
+    async def delete(self, key: str) -> bool: ... # idempotent
     async def signed_url(self, key: str, *, ttl_seconds: int,
-                         filename: str) -> str | None: ...  # None if unsupported
+                         filename: str) -> str | None: ... # None if unsupported
     def supports_signed_urls(self) -> bool: ...
 ```
 
@@ -272,7 +272,7 @@ api and worker) and `GCSStorage` (prod).
 `signed_url` returning `None` is deliberate. The local backend cannot sign, so
 in dev an over-threshold job falls back to proxy-streaming. That difference is
 real and must be visible, so it is in the contract rather than hidden behind an
-exception — and it is asserted in the shared suite.
+exception - and it is asserted in the shared suite.
 
 ### The shared suite
 
@@ -280,7 +280,7 @@ One parametrised test class, identical assertions, run against both backends:
 
 ```python
 @pytest.fixture(params=["local", "gcs"])
-def storage(request): ...   # gcs skipped unless GCS_TEST_BUCKET is set
+def storage(request): ... # gcs skipped unless GCS_TEST_BUCKET is set
 ```
 
 Assertions that must hold identically: round-trip integrity; `size` matches
@@ -290,8 +290,8 @@ than raising; every Range form from section B, including `start=0`,
 then `exists` is `False`; keys containing slashes and unicode; concurrent reads
 of the same key; and zero-byte objects.
 
-Backend-specific behaviour is confined to two tests — `supports_signed_urls`,
-and that a signed URL is time-limited — and everything else is shared.
+Backend-specific behaviour is confined to two tests - `supports_signed_urls`,
+and that a signed URL is time-limited - and everything else is shared.
 
 CI runs `local` for real and `gcs` against a **mocked client**. No
 `fake-gcs-server` in compose (D-014, section F). The real GCS path is verified
@@ -303,9 +303,9 @@ over: a mocked backend proves our call sequence, not Google's behaviour.
 ## Endpoint shape
 
 ```
-POST /api/jobs            -> { job_id }              rate limited per IP
-GET  /api/jobs/{id}       -> { status, progress, error, download_token? }
-GET  /api/download/{tok}  -> 200 / 206 / 302-to-signed-URL
+POST /api/jobs -> { job_id } rate limited per IP
+GET /api/jobs/{id} -> { status, progress, error, download_token? }
+GET /api/download/{tok} -> 200 / 206 / 302-to-signed-URL
 ```
 
 `progress` stays a monotonic int and `status` an enum, per D-002, so SSE can be
@@ -328,19 +328,19 @@ Accepted risk, with three mitigations:
 3. **A per-IP daily byte budget specific to signed-URL issuance**
    (`SIGNED_URL_DAILY_BYTE_BUDGET`), separate from the request-count limits.
    Exhausting it returns `RATE_LIMITED`. Request counts are the wrong unit here
-   — ten 2 GB URLs and ten 2 MB URLs are the same under a count limit and three
+   - ten 2 GB URLs and ten 2 MB URLs are the same under a count limit and three
    orders of magnitude apart on the bill.
 
 **Residual risk, which cannot be fixed on our side:** a signed URL is a bearer
 token. For its two-minute life anyone holding it can fetch the object, and
-nothing we do server-side changes that — that is what makes it shareable and
+nothing we do server-side changes that - that is what makes it shareable and
 also what makes it cheap. It is the reason signed URLs are the exception above
 200 MB rather than the default delivery path (D-001).
 
 ## F. No `fake-gcs-server` in the dev stack
 
 Considered and rejected. Dev uses `LocalVolumeStorage`, which cannot sign and
-therefore falls back to proxy-streaming — a real difference, asserted by the
+therefore falls back to proxy-streaming - a real difference, asserted by the
 parametrised suite rather than hidden. Adding a service to a compose stack that
 is only now being brought up for the first time is the wrong sequencing.
 
@@ -350,7 +350,7 @@ get quietly reintroduced.
 
 ## G. The signed-URL path has no spend semantics
 
-Not an omission to be filled in later — a property of the path. Above the
+Not an omission to be filled in later - a property of the path. Above the
 threshold GCS serves the bytes directly. We never see them, so there is no
 observation that could complete coverage, and none that could spend a token.
 
@@ -361,14 +361,14 @@ later should start here.
 Made explicit in the model rather than left to inference:
 
 - Such tokens are `Delivery.SIGNED`, state `issued_signed`, which is terminal.
-- `maybe_spend()` returns unchanged for them — even when handed a record that
+- `maybe_spend()` returns unchanged for them - even when handed a record that
   claims full coverage, so a bug elsewhere cannot spend one by accident.
 - `record_delivery()` **raises**. Silently ignoring it would let a future
   caller believe it was tracking something.
 - `can_stream()` refuses with `INTERNAL_ERROR`: the endpoint redirects rather
   than streams, so reaching that call is a programming error, not a user one.
 - **Deletion is by TTL alone.** The grace window does not apply, because there
-  is nothing to be graceful about — we never learn whether the transfer
+  is nothing to be graceful about - we never learn whether the transfer
   happened at all.
 
 The consequence is accepted: a large object occupies storage for the full 15

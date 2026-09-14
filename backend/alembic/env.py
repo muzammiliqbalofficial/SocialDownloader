@@ -10,7 +10,7 @@ from sqlalchemy.pool import NullPool
 
 from alembic import context
 from app.config import get_settings
-from app.models import Base  # noqa: F401 -- registers all tables on the metadata
+from app.models import Base # noqa: F401 -- registers all tables on the metadata
 
 config = context.config
 

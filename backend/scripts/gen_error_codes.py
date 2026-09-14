@@ -5,8 +5,8 @@ The Python enum is the single source of truth (section 10). Run this after
 touching `app/core/errors.py`; CI fails if the checked-in file is stale.
 
 Usage:
-    python scripts/gen_error_codes.py          # write the file
-    python scripts/gen_error_codes.py --check  # exit 1 if it would change
+    python scripts/gen_error_codes.py # write the file
+    python scripts/gen_error_codes.py --check # exit 1 if it would change
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.errors import ERROR_CATALOG  # noqa: E402
+from app.core.errors import ERROR_CATALOG # noqa: E402
 
 OUTPUT = Path(__file__).resolve().parents[2] / "frontend" / "lib" / "errors.ts"
 
@@ -34,34 +34,34 @@ def _ts_string(value: str) -> str:
 def render() -> str:
     lines: list[str] = [HEADER, "export const ERROR_CODES = ["]
     for code in ERROR_CATALOG:
-        lines.append(f"  {_ts_string(str(code))},")
+        lines.append(f" {_ts_string(str(code))},")
     lines.append("] as const;\n")
     lines.append("export type ErrorCode = (typeof ERROR_CODES)[number];\n")
     lines.append("export interface ErrorSpec {")
-    lines.append("  message: string;")
-    lines.append("  action: string;")
-    lines.append("  retryable: boolean;")
-    lines.append("  status: number;")
+    lines.append(" message: string;")
+    lines.append(" action: string;")
+    lines.append(" retryable: boolean;")
+    lines.append(" status: number;")
     lines.append("}\n")
     lines.append("export const ERROR_CATALOG: Record<ErrorCode, ErrorSpec> = {")
     for code, spec in ERROR_CATALOG.items():
-        lines.append(f"  {code}: {{")
-        lines.append(f"    message: {_ts_string(spec.message)},")
-        lines.append(f"    action: {_ts_string(spec.action)},")
-        lines.append(f"    retryable: {str(spec.retryable).lower()},")
-        lines.append(f"    status: {spec.status},")
-        lines.append("  },")
+        lines.append(f" {code}: {{")
+        lines.append(f" message: {_ts_string(spec.message)},")
+        lines.append(f" action: {_ts_string(spec.action)},")
+        lines.append(f" retryable: {str(spec.retryable).lower()},")
+        lines.append(f" status: {spec.status},")
+        lines.append(" },")
     lines.append("};\n")
     lines.append(
         "export function describeError(code: string): ErrorSpec {\n"
-        "  return (\n"
-        "    ERROR_CATALOG[code as ErrorCode] ?? {\n"
-        '      message: "Something broke on our side.",\n'
-        '      action: "Try again in a moment.",\n'
-        "      retryable: true,\n"
-        "      status: 500,\n"
-        "    }\n"
-        "  );\n"
+        " return (\n"
+        " ERROR_CATALOG[code as ErrorCode] ?? {\n"
+        ' message: "Something broke on our side.",\n'
+        ' action: "Try again in a moment.",\n'
+        " retryable: true,\n"
+        " status: 500,\n"
+        " }\n"
+        " );\n"
         "}\n"
     )
     return "\n".join(lines)

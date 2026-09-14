@@ -19,7 +19,7 @@ A web application that lets a user paste a public URL from YouTube, Facebook,
 Instagram, LinkedIn or Snapchat and download the media, plus extract metadata
 and derived assets that mainstream downloader sites do not offer.
 
-The differentiator is **not** the download itself — it is the extraction layer
+The differentiator is **not** the download itself - it is the extraction layer
 (captions, thumbnails, metadata, transcripts, AI summaries). That layer is the
 product's core value, not an add-on.
 
@@ -48,7 +48,7 @@ silently work around them.
 
 > **Amended (D-001).** Constraint 5 originally read "Prefer streaming directly
 > to the client so nothing is written to disk at all." That is unachievable
-> given the worker/API process split — see §6. The 15-minute deletion
+> given the worker/API process split - see §6. The 15-minute deletion
 > requirement is unchanged and is enforced by the TTL sweeper.
 
 ## 3. Tech stack
@@ -57,7 +57,7 @@ silently work around them.
 
 - Python 3.11+, FastAPI, Uvicorn
 - `yt-dlp` as the primary extraction engine (pinned, but expect frequent bumps
-  — it breaks often; see the weekly canary in §12)
+  - it breaks often; see the weekly canary in §12)
 - `gallery-dl` as fallback for image carousels and galleries
 - `playwright` (chromium, headless) only for HTML-based text extraction where
   no API/extractor exists
@@ -87,13 +87,13 @@ silently work around them.
 - Docker + docker-compose for local dev (api, worker, redis, postgres, web)
 - Target deployment: Google Cloud Run (backend) + Vercel (frontend), with a GCS
   bucket for temporary large files
-- Backend fully stateless — no local filesystem assumptions beyond `/tmp`
+- Backend fully stateless - no local filesystem assumptions beyond `/tmp`
 
 > **Amended (D-005).** Originally Next.js 14 and Tailwind 3. Moved to Next 16 +
 > Tailwind 4 + current shadcn generators: pinning an out-of-support major on a
 > greenfield project is unjustifiable debt.
 >
-> **Amended (D-006).** `asyncpg` only. `psycopg2-binary` is dropped — Alembic
+> **Amended (D-006).** `asyncpg` only. `psycopg2-binary` is dropped - Alembic
 > runs through the same async engine as the app, so a second driver earns
 > nothing.
 >
@@ -109,24 +109,24 @@ Implemented as an explicit, data-driven capability registry
 fetches this registry and renders only the capabilities actually available for
 the detected URL.
 
-| Platform  | Video          | Audio | Thumbnail     | Post text              | Metadata | Notes                                                        |
+| Platform | Video | Audio | Thumbnail | Post text | Metadata | Notes |
 | --------- | -------------- | ----- | ------------- | ---------------------- | -------- | ------------------------------------------------------------ |
-| YouTube   | Yes            | Yes   | Yes (all res) | Description + chapters | Full     | Includes Shorts. Subtitles via `--write-subs`.               |
-| Instagram | Yes            | Yes   | Yes           | Caption + hashtags     | Partial  | Reels/posts/carousels. Public only. Stories need cookies — best-effort. |
-| Facebook  | Yes            | Yes   | Yes           | Post text              | Partial  | Public videos and Reels only.                                |
-| LinkedIn  | Yes            | Yes   | Yes           | **Full post text**     | Partial  | Native video only. `og:` meta tags first, Playwright fallback. Fragile. |
-| Snapchat  | Spotlight only | Yes   | Yes           | Limited                | Minimal  | Stories not reliably accessible. Disabled by default (D-004). |
+| YouTube | Yes | Yes | Yes (all res) | Description + chapters | Full | Includes Shorts. Subtitles via `--write-subs`. |
+| Instagram | Yes | Yes | Yes | Caption + hashtags | Partial | Reels/posts/carousels. Public only. Stories need cookies - best-effort. |
+| Facebook | Yes | Yes | Yes | Post text | Partial | Public videos and Reels only. |
+| LinkedIn | Yes | Yes | Yes | **Full post text** | Partial | Native video only. `og:` meta tags first, Playwright fallback. Fragile. |
+| Snapchat | Spotlight only | Yes | Yes | Limited | Minimal | Stories not reliably accessible. Disabled by default (D-004). |
 
 For every best-effort or fragile capability: degrade gracefully with a specific
 error message. Never show a generic "failed" state.
 
 > **Amended (D-004).** Snapchat is implemented in Phase 5 but ships **disabled
 > behind an env var**. When disabled it is omitted from the capability registry
-> entirely — no greyed-out tab, no failing tab, no mention in the UI.
+> entirely - no greyed-out tab, no failing tab, no mention in the UI.
 
 ## 5. Feature spec
 
-### Tier 1 — table stakes
+### Tier 1 - table stakes
 
 - URL paste with automatic platform + content-type detection
 - Format and quality picker (resolution, codec, filesize) rendered from the
@@ -137,58 +137,58 @@ error message. Never show a generic "failed" state.
 - Clipboard paste button, mobile-first responsive layout
 - Clear, specific error states per failure mode
 
-### Tier 2 — differentiators (the reason this project exists)
+### Tier 2 - differentiators (the reason this project exists)
 
-- **Post text extractor** — full caption or post body for Instagram, LinkedIn
+- **Post text extractor** - full caption or post body for Instagram, LinkedIn
   and Facebook, with one-click copy. Preserve line breaks and emoji. Show a
   character count.
-- **Hashtag and mention extractor** — parsed into separate copyable chips, plus
+- **Hashtag and mention extractor** - parsed into separate copyable chips, plus
   "copy all hashtags".
-- **Thumbnail / cover downloader** — every available resolution for Instagram
+- **Thumbnail / cover downloader** - every available resolution for Instagram
   Reels, YouTube videos and Facebook videos, as a grid with dimensions
   labelled. Include the maxres YouTube variant.
-- **Full carousel download** — every image in a multi-image Instagram post,
+- **Full carousel download** - every image in a multi-image Instagram post,
   bundled as a streamed ZIP.
-- **Subtitle / caption download** — SRT and VTT for YouTube, including
+- **Subtitle / caption download** - SRT and VTT for YouTube, including
   auto-generated tracks, with language selection.
-- **Metadata JSON export** — title, author, upload date, duration, view/like/
+- **Metadata JSON export** - title, author, upload date, duration, view/like/
   comment counts where public, dimensions, codecs, all format variants. One
   download button, one copy button.
-- **Batch mode** — up to 10 URLs, queued, producing a single ZIP. Rate-limited
+- **Batch mode** - up to 10 URLs, queued, producing a single ZIP. Rate-limited
   and session-gated. Built last.
-- **Frame grabber** — extract a still frame at a user-specified timestamp as
+- **Frame grabber** - extract a still frame at a user-specified timestamp as
   PNG.
 
-> **Removed (D-003).** "HD profile picture downloader" is cut entirely — not
+> **Removed (D-003).** "HD profile picture downloader" is cut entirely - not
 > the gated variant either. It was the most abuse-adjacent item in the list,
 > the one platforms most actively rate-limit, and it does not serve the
 > extraction-layer thesis. **Do not reintroduce it in any later phase.**
 
-### Tier 3 — AI layer
+### Tier 3 - AI layer
 
-- **Auto-transcription** — extracted audio to Groq Whisper, returning plain
+- **Auto-transcription** - extracted audio to Groq Whisper, returning plain
   text plus timestamped SRT. Input duration capped (start at 10 minutes);
   reject longer media with a clear message.
-- **Video summary** — transcript to Gemini, returning a short abstract plus 3–5
+- **Video summary** - transcript to Gemini, returning a short abstract plus 3-5
   key bullet points.
-- **Caption repurposer** — platform-adapted variants of an extracted caption
+- **Caption repurposer** - platform-adapted variants of an extracted caption
   (LinkedIn version of an Instagram caption and vice versa). Obvious in the UI
   that output is AI-generated.
-- **Suggested hashtags** — derived from transcript or caption content.
+- **Suggested hashtags** - derived from transcript or caption content.
 
 Every Tier 3 feature runs as a separate, explicitly user-triggered job. Never
-automatically on download — they cost money and add latency.
+automatically on download - they cost money and add latency.
 
 ## 6. Architecture
 
 ```
-Client → POST /api/analyze (fast, synchronous, ~2–5s)
+Client → POST /api/analyze (fast, synchronous, ~2-5s)
        ← platform, content type, available formats, capabilities, metadata, extracted text
-Client → POST /api/jobs  (creates an async job)
+Client → POST /api/jobs (creates an async job)
        ← job_id
-Client → GET  /api/jobs/{id}  (polled by TanStack Query until terminal state)
+Client → GET /api/jobs/{id} (polled by TanStack Query until terminal state)
        ← status, progress, error, download_token
-Client → GET  /api/download/{download_token}
+Client → GET /api/download/{download_token}
        ← streams the file, single-use token, 15-minute TTL
 ```
 
@@ -198,7 +198,7 @@ Decisions to honour:
 - Every `yt-dlp` invocation runs in the worker with a hard timeout and a
   subprocess boundary, never in the API request path.
 - Wrap `yt-dlp` in a single adapter module. The rest of the codebase must not
-  know it exists — this is the component most likely to be replaced.
+  know it exists - this is the component most likely to be replaced.
 - Structured JSON logging with a request ID. Never log full URLs at info level;
   log platform and content type instead.
 
@@ -236,19 +236,19 @@ handling, proxy-buffering edge cases and its own test surface. At 2-second
 polls a 60-second download shows ~30 progress steps, which is adequate.
 
 **Keep the job model SSE-ready**: `progress` is a monotonically increasing int
-(0–100) and `status` is an enum. SSE can then be added later without changing
+(0-100) and `status` is an enum. SSE can then be added later without changing
 the client contract.
 
 ## 7. Data model
 
 Minimal and privacy-conscious.
 
-- `jobs` — id (uuid), platform, content_type, action, requested_format, status
+- `jobs` - id (uuid), platform, content_type, action, requested_format, status
   enum, progress int, error_code, error_message, created_at, started_at,
   completed_at, expires_at, ip_hash (salted SHA-256, never the raw IP).
   **The source URL is not stored** beyond a truncated, salted digest for
   deduplication.
-- `usage_daily` — day, platform, content_type, action, count. Aggregate
+- `usage_daily` - day, platform, content_type, action, count. Aggregate
   counters for a stats page. No per-user rows.
 
 No user accounts in v1. If batch mode needs gating, use a signed anonymous
@@ -277,18 +277,18 @@ session cookie.
   /app
     main.py
     config.py
-    /api          routes: analyze, jobs, download, health, registry
-    /platforms    registry.py, base.py, youtube.py, instagram.py, facebook.py, linkedin.py, snapchat.py
-    /extractors   ytdlp_adapter.py, gallerydl_adapter.py, html_scraper.py
-    /services     transcription.py, summarizer.py, media_ops.py, storage.py
-    /workers      tasks.py
-    /models       db models + pydantic schemas
-    /core         ratelimit.py, security.py, logging.py, errors.py
+    /api routes: analyze, jobs, download, health, registry
+    /platforms registry.py, base.py, youtube.py, instagram.py, facebook.py, linkedin.py, snapchat.py
+    /extractors ytdlp_adapter.py, gallerydl_adapter.py, html_scraper.py
+    /services transcription.py, summarizer.py, media_ops.py, storage.py
+    /workers tasks.py
+    /models db models + pydantic schemas
+    /core ratelimit.py, security.py, logging.py, errors.py
   /tests
   alembic/
   Dockerfile
 /frontend
-  /app  /components  /lib  /hooks
+  /app /components /lib /hooks
   Dockerfile
 /docs
   BRIEF.md
@@ -320,32 +320,32 @@ a stack trace.
 In order. Each phase ends in a running, testable state, and reports back before
 the next begins.
 
-1. **Skeleton** ✅ — docker-compose brings the full stack online. Health
+1. **Skeleton** - docker-compose brings the full stack online. Health
    endpoint, config loading, structured logging, Alembic baseline, CI-ready
    pytest.
-2. **Analyze pipeline** ✅ — platform registry, yt-dlp adapter, `/api/analyze`
+2. **Analyze pipeline** - platform registry, yt-dlp adapter, `/api/analyze`
    end to end for YouTube only. Full error taxonomy wired. Per-IP rate limiting
    landed here rather than in Phase 3, because constraint 6 says day one and
    analyze is the expensive unauthenticated endpoint.
-3. **Download pipeline** — job queue, worker, storage abstraction, streaming
+3. **Download pipeline** - job queue, worker, storage abstraction, streaming
    download endpoint, single-use tokens, TTL cleanup, per-IP rate limiting.
    Video and audio for YouTube.
-4. **Frontend core** — paste, analyze, format picker, download, progress, error
+4. **Frontend core** - paste, analyze, format picker, download, progress, error
    states. Tier 1 complete for YouTube.
-5. **Platform expansion** — Instagram, then Facebook, then LinkedIn, then
+5. **Platform expansion** - Instagram, then Facebook, then LinkedIn, then
    Snapchat. One at a time, each with integration tests and honest capability
    flags. LinkedIn and Snapchat are expected to be partial; document exactly
    what works. Snapchat ships disabled (D-004).
-6. **Tier 2 features** — text extractor, hashtag chips, thumbnail grid,
+6. **Tier 2 features** - text extractor, hashtag chips, thumbnail grid,
    carousel ZIP, subtitles, metadata export, frame grabber. Batch mode last.
-7. **Tier 3 AI layer** — transcription, then summary, then caption repurposer.
+7. **Tier 3 AI layer** - transcription, then summary, then caption repurposer.
    All behind feature flags with graceful degradation.
-8. **Hardening** — compliance pages, DMCA route, stats page, cleanup cron,
+8. **Hardening** - compliance pages, DMCA route, stats page, cleanup cron,
    Cloud Run deployment config, README with setup and legal considerations.
 
 ## 12. Testing
 
-- Unit tests for URL parsing, the platform registry and error mapping — no
+- Unit tests for URL parsing, the platform registry and error mapping - no
   network.
 - Integration tests for extractors using recorded fixtures (committed JSON
   snapshots), so the suite passes offline and in CI.
@@ -379,7 +379,7 @@ the next begins.
 Newest last. Each entry records what changed and why, so a later session does
 not relitigate it.
 
-### D-001 — Worker always writes to object storage; proxy-stream by default
+### D-001 - Worker always writes to object storage; proxy-stream by default
 
 **Date:** 2026-08-13 · **Phase:** 1 → 3 · **Status:** accepted
 
@@ -397,10 +397,10 @@ Signed URLs are deliberately **not** the default: a signed URL can be shared
 and replayed until it expires, and it exposes the bucket path, which breaks the
 single-use token guarantee. Above the threshold that weaker guarantee is
 accepted in exchange for avoiding Cloud Run request timeouts and double egress.
-The 200 MB line is a cost/timeout optimisation, not a correctness boundary —
+The 200 MB line is a cost/timeout optimisation, not a correctness boundary -
 both paths must be independently correct.
 
-### D-002 — Polling, not SSE, for job progress
+### D-002 - Polling, not SSE, for job progress
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** declined (SSE)
 
@@ -409,11 +409,11 @@ instance, and it adds reconnect handling, proxy-buffering edge cases and its
 own tests. At 2-second polls a 60-second download shows ~30 steps, which is
 adequate.
 
-Build polling as specified. Keep the job model SSE-ready — monotonic int
-`progress` plus a `status` enum — so SSE can be added later without changing
+Build polling as specified. Keep the job model SSE-ready - monotonic int
+`progress` plus a `status` enum - so SSE can be added later without changing
 the client contract.
 
-### D-003 — Cut the HD profile picture downloader
+### D-003 - Cut the HD profile picture downloader
 
 **Date:** 2026-08-13 · **Phase:** 6 · **Status:** accepted
 
@@ -422,17 +422,17 @@ which adds complexity for negligible value. It was the most abuse-adjacent
 feature in the spec and does not serve the extraction-layer thesis. Removed
 from §5 so no later phase reintroduces it.
 
-### D-004 — Snapchat ships disabled behind an env var
+### D-004 - Snapchat ships disabled behind an env var
 
 **Date:** 2026-08-13 · **Phase:** 5 · **Status:** accepted
 
 Per the matrix, Snapchat is Spotlight-only with minimal metadata and unreliable
 Stories access. Shipping a tab that mostly fails costs more trust than an
 absent platform. Implement it in Phase 5, ship it disabled, and when disabled
-omit it from the capability registry entirely — not a greyed-out tab, not a
+omit it from the capability registry entirely - not a greyed-out tab, not a
 failing tab.
 
-### D-005 — Next.js 16 + Tailwind 4, not Next 14 + Tailwind 3
+### D-005 - Next.js 16 + Tailwind 4, not Next 14 + Tailwind 3
 
 **Date:** 2026-08-13 · **Phase:** 1 · **Status:** accepted
 
@@ -441,7 +441,7 @@ shadcn generators target Tailwind 4. Pinning an out-of-support major on a
 greenfield project is unjustifiable debt. Migrated during Phase 1, while the
 frontend was still one page and the change was nearly free.
 
-### D-006 — asyncpg only
+### D-006 - asyncpg only
 
 **Date:** 2026-08-13 · **Phase:** 1 · **Status:** accepted
 
@@ -449,7 +449,7 @@ Alembic runs through the same async engine as the application, so
 `psycopg2-binary` adds a second driver, a second failure mode and a second
 thing to pin, for nothing.
 
-### D-007 — TypeScript held at 5.9.3
+### D-007 - TypeScript held at 5.9.3
 
 **Date:** 2026-08-13 · **Phase:** 1 · **Status:** accepted (engineer's call)
 
@@ -461,7 +461,7 @@ on the newest major, and the reasoning is the opposite of D-005: there the risk
 was staying on an unsupported version, here the risk is moving to an unproven
 one.
 
-### D-008 — The error taxonomy is generated, not duplicated
+### D-008 - The error taxonomy is generated, not duplicated
 
 **Date:** 2026-08-13 · **Phase:** 1 · **Status:** accepted
 
@@ -472,20 +472,20 @@ stale. The same enforcement-over-convention approach guards §7: a test fails if
 anyone adds a `jobs` column whose name suggests a cleartext URL, IP, cookie or
 token.
 
-### D-009 — Weekly yt-dlp canary
+### D-009 - Weekly yt-dlp canary
 
 **Date:** 2026-08-13 · **Phase:** 1 · **Status:** accepted
 
 `yt-dlp` breakage is the most likely cause of a production outage here. A
 scheduled weekly workflow bumps it to latest, runs the `live` suite, and opens
-a PR on success or an issue on failure — an automated canary rather than
+a PR on success or an issue on failure - an automated canary rather than
 someone noticing that downloads stopped working.
 
-### D-010 — `/api/analyze` runs yt-dlp as a subprocess from the API process
+### D-010 - `/api/analyze` runs yt-dlp as a subprocess from the API process
 
 **Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted (engineer's call)
 
-§6 says `/api/analyze` is fast and synchronous (2–5s) *and* that every yt-dlp
+§6 says `/api/analyze` is fast and synchronous (2-5s) *and* that every yt-dlp
 invocation runs in the worker, never in the API request path. Taken literally
 those conflict: routing analyze through the job queue would make it
 asynchronous and cost a poll round-trip on the most latency-sensitive call in
@@ -498,7 +498,7 @@ expiry the whole process *group* is killed (yt-dlp spawns ffmpeg; killing only
 the parent orphans it). The event loop never blocks, the work is bounded and
 kill-able, and yt-dlp's global state stays out of our address space.
 
-Downloads remain worker-only, as specified — that is where the long-running,
+Downloads remain worker-only, as specified - that is where the long-running,
 disk-touching work happens.
 
 If analyze latency or instance CPU becomes a problem on Cloud Run, the fix is
@@ -511,12 +511,12 @@ separate OS process whose resident memory is charged to the container:
 
 | Figure | Value | Source |
 | --- | --- | --- |
-| Floor | **45 MiB** | Measured `ru_maxrss` of the child on Python 3.11 with the network blocked, so it exits before parsing a format list — interpreter plus yt-dlp imports and nothing more. |
+| Floor | **45 MiB** | Measured `ru_maxrss` of the child on Python 3.11 with the network blocked, so it exits before parsing a format list - interpreter plus yt-dlp imports and nothing more. |
 | Budget | **80 MiB** | Floor plus headroom for a real extraction: a large `formats` array, TLS buffers, and the JSON document held in memory while it is written to stdout. |
 
 Cloud Run's default `containerConcurrency` is 80. At 80 MiB each that is
 **~6.4 GiB** of concurrent extraction on an instance we would plausibly pay
-1–2 GiB for. No functional test surfaces it, because every test issues one
+1-2 GiB for. No functional test surfaces it, because every test issues one
 request at a time.
 
 So `MAX_CONCURRENT_EXTRACTIONS` (default 4) gates the subprocess behind an
@@ -526,14 +526,14 @@ with `Retry-After` rather than joining an unbounded queue: a fast honest
 rejection beats a request that dies at the load balancer.
 
 The bound lives in the application, not only in deployment config, so it holds
-however the service is run. `containerConcurrency` is set explicitly to 8 —
+however the service is run. `containerConcurrency` is set explicitly to 8 -
 **it must not exceed `MAX_CONCURRENT_EXTRACTIONS` by more than about 2x**, the
 multiple being the queue depth behind the semaphore. Full arithmetic in
 `deploy/cloudrun/README.md`; the in-process half is pinned by
 `tests/test_extractor_concurrency.py`, which fires 20 concurrent calls and
 asserts observed peak concurrency never exceeds the limit.
 
-### D-011 — Error messages never enumerate platforms
+### D-011 - Error messages never enumerate platforms
 
 **Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted
 
@@ -548,7 +548,7 @@ from the registry (`supported_platform_names`) and passed as the error
 This is §13's "every capability shown in the UI actually works" applied to
 error copy, which is otherwise easy to overlook.
 
-### D-012 — Next.js `AGENTS.md` / `CLAUDE.md` stay committed
+### D-012 - Next.js `AGENTS.md` / `CLAUDE.md` stay committed
 
 **Date:** 2026-08-13 · **Phase:** 2 · **Status:** accepted after review
 
@@ -572,12 +572,12 @@ Provenance was then established from the installed package, not from memory:
   `agentRules: false` in next.config to disable."
 - **Scope:** the block only tells an agent to read the version-matched docs
   bundled in `node_modules`. It grants nothing our dependency does not already
-  have — we execute that package's code on every build.
+  have - we execute that package's code on every build.
 
 **Why committed rather than gitignored.** Gitignoring would not remove the
 file. `next dev` recreates it, agents still read it, and changes to it would
 land silently on disk where nobody reviews them. That makes the surface
-invisible, not absent — strictly worse. Committed, any change to the managed
+invisible, not absent - strictly worse. Committed, any change to the managed
 block arrives as a reviewable diff.
 
 **The actual off switch** is `agentRules: false` in `next.config.mjs`, which
@@ -586,9 +586,9 @@ genuinely useful given Next 16 postdates most training data, and the
 review-the-diff property is worth more than the file's absence.
 
 Revisit if a future Next version puts anything in that block beyond "read the
-bundled docs" — which is precisely the change a committed file makes visible.
+bundled docs" - which is precisely the change a committed file makes visible.
 
-### D-013 — Download completion is interval coverage, never a byte count
+### D-013 - Download completion is interval coverage, never a byte count
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted after a design bug
 
@@ -622,13 +622,13 @@ side. They cannot request the missing bytes, and the job they paid for is gone.
 It is the worst failure this service can have, and it is worth failing safe in
 every ambiguous case to avoid it.
 
-### D-014 — No `fake-gcs-server` in the dev compose stack
+### D-014 - No `fake-gcs-server` in the dev compose stack
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
 
 Proposed so the GCS path could be exercised locally; rejected. Dev uses the
 local volume backend, which cannot sign URLs and therefore falls back to
-proxy-streaming — a genuine behavioural difference that the parametrised
+proxy-streaming - a genuine behavioural difference that the parametrised
 storage suite asserts rather than hides. Adding another service to a compose
 stack that is only now being brought up for the first time is the wrong
 sequencing.
@@ -640,7 +640,7 @@ mocked backend proves our call sequence, not Google's behaviour.
 Do not reintroduce `fake-gcs-server` without a specific failure it would have
 caught.
 
-### D-015 — Signed-URL egress is budgeted in bytes at issuance
+### D-015 - Signed-URL egress is budgeted in bytes at issuance
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted risk
 
@@ -660,7 +660,7 @@ For two minutes, anyone holding it can fetch the object. That is inherent to
 the mechanism, and it is why signed URLs are the exception above 200 MB rather
 than the default delivery path (D-001).
 
-### D-016 — Spend is decoupled from deletion by a grace window
+### D-016 - Spend is decoupled from deletion by a grace window
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
 
@@ -670,7 +670,7 @@ D-013 made completion an exact interval calculation. It did not make the
 `ByteCoverage` is fed by bytes written to the ASGI send channel. **Those are
 not bytes the client received.** uvicorn's socket buffer and Cloud Run's
 frontend proxy both accept bytes in flight, so a client dropping near the end
-can produce a complete `[0, size)` record while never seeing the tail — and we
+can produce a complete `[0, size)` record while never seeing the tail - and we
 would delete the object. The interval arithmetic is right; its input is
 optimistic, and no amount of interval precision fixes that.
 
@@ -693,7 +693,7 @@ receipt at all, and pretending otherwise is what produced the original bug.
 
 Implemented in `app/services/download_token.py`.
 
-### D-017 — The signed-URL path has no spend semantics, by construction
+### D-017 - The signed-URL path has no spend semantics, by construction
 
 **Date:** 2026-08-13 · **Phase:** 3 · **Status:** accepted
 
@@ -711,7 +711,7 @@ Made explicit in the model so it cannot be reached by accident:
 - `maybe_spend()` returns unchanged even when handed a full-coverage record.
 - `record_delivery()` raises rather than silently ignoring, so a caller that
   believes it is tracking coverage finds out immediately.
-- `can_stream()` refuses with `INTERNAL_ERROR` — the endpoint redirects, so
+- `can_stream()` refuses with `INTERNAL_ERROR` - the endpoint redirects, so
   reaching it is a programming error, not a user-facing one.
 - Deletion is by TTL alone; the grace window does not apply, because there is
   nothing to be graceful about.

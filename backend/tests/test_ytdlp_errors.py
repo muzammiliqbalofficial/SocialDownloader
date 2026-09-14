@@ -96,7 +96,7 @@ def test_unknown_failure_defaults_to_extractor_outdated():
 
 def test_empty_stderr_defaults_safely():
     assert map_stderr("") is ErrorCode.EXTRACTOR_OUTDATED
-    assert map_stderr(None) is ErrorCode.EXTRACTOR_OUTDATED  # type: ignore[arg-type]
+    assert map_stderr(None) is ErrorCode.EXTRACTOR_OUTDATED # type: ignore[arg-type]
 
 
 def test_proxy_failure_is_transport_not_platform_drift():

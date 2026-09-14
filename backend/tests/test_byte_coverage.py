@@ -36,12 +36,12 @@ def test_repeated_first_chunk_never_counts_as_complete():
 def test_a_naive_byte_sum_would_have_been_satisfied():
     """Pins the distinction explicitly, so nobody reintroduces the counter."""
     naive_total = sum(HALF_MB for _ in range(10))
-    assert naive_total >= FIVE_MB  # the wrong condition would have passed
+    assert naive_total >= FIVE_MB # the wrong condition would have passed
 
     coverage = ByteCoverage()
     for _ in range(10):
         coverage = coverage.add(0, HALF_MB)
-    assert coverage.covers(FIVE_MB) is False  # the right one does not
+    assert coverage.covers(FIVE_MB) is False # the right one does not
 
 
 # --------------------------------------------------------------------------

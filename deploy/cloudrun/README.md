@@ -1,7 +1,7 @@
 # Cloud Run configuration
 
 Two services from one image: `api` (HTTP) and `worker` (arq). The worker YAML
-is committed but **not deployable until Phase 3** adds an HTTP listener — see
+is committed but **not deployable until Phase 3** adds an HTTP listener - see
 the note at the top of `worker.service.yaml`.
 
 ## The concurrency contract
@@ -23,10 +23,10 @@ Measured cost per subprocess:
 The arithmetic that sets the limits:
 
 ```
-                     4 extractions  x  80 MiB   =  320 MiB
-  4 stdout buffers at the 32 MiB parse cap      =  128 MiB
-  Python + FastAPI + SQLAlchemy + asyncpg       =  250 MiB
-                                          peak  ≈  700 MiB
+                     4 extractions x  80 MiB =  320 MiB
+  4 stdout buffers at the 32 MiB parse cap =  128 MiB
+  Python + FastAPI + SQLAlchemy + asyncpg =  250 MiB
+                                          peak ≈  700 MiB
 ```
 
 Against a 2 GiB limit that is roughly 2.8x headroom. Cloud Run OOM-kills
@@ -35,7 +35,7 @@ the point.
 
 **What happens without the bound.** Cloud Run's default
 `containerConcurrency` is 80. Eighty simultaneous analyze calls, each spawning
-a subprocess, is 80 x 80 MiB ≈ **6.4 GiB** — an instant OOM on any instance
+a subprocess, is 80 x 80 MiB ≈ **6.4 GiB** - an instant OOM on any instance
 size we would plausibly pay for. Nothing in the functional test suite would
 ever show this, because every test issues one request at a time.
 
@@ -53,7 +53,7 @@ and at most four wait; a waiter that does not get a slot within
 `EXTRACTION_QUEUE_WAIT_SECONDS` (2s) receives `429 RATE_LIMITED` with
 `Retry-After: 5`. At Cloud Run's default of 80 the same semaphore still
 prevents the OOM, but 76 requests would sit in a queue burning the client's
-patience and then time out at the load balancer — a worse failure than an
+patience and then time out at the load balancer - a worse failure than an
 honest, immediate rejection.
 
 Raising either number means redoing the memory arithmetic above and raising
@@ -80,7 +80,7 @@ when Postgres or Redis is unreachable.
 
 The worker runs with `cpu-throttling: "false"` and `minScale: 1`, so it bills
 continuously. That is unavoidable: with throttling on, Cloud Run freezes CPU
-between requests, and the worker never receives a request — jobs would not run
+between requests, and the worker never receives a request - jobs would not run
 and the TTL sweeper would not sweep, silently breaking the 15-minute media
 deletion guarantee.
 

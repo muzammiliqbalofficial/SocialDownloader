@@ -86,5 +86,5 @@ class Job(Base):
         Index("ix_jobs_url_hash", "url_hash"),
     )
 
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+    def __repr__(self) -> str: # pragma: no cover - debugging aid
         return f"<Job {self.id} {self.platform}/{self.action} {self.status}>"

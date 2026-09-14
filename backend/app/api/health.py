@@ -1,8 +1,8 @@
 """Health, readiness and liveness.
 
 Three endpoints because they answer three different questions:
-  /live   -- is the process up? (no dependencies touched; Cloud Run liveness)
-  /ready  -- can it serve traffic? (503 when a dependency is down)
+  /live -- is the process up? (no dependencies touched; Cloud Run liveness)
+  /ready -- can it serve traffic? (503 when a dependency is down)
   /health -- human/dashboard view with per-component detail
 """
 

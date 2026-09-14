@@ -100,7 +100,7 @@ def supported_platform_names(settings: Settings | None = None) -> list[str]:
 
 def _supported_detail(settings: Settings) -> str:
     names = supported_platform_names(settings)
-    if not names:  # pragma: no cover - only if everything is switched off
+    if not names: # pragma: no cover - only if everything is switched off
         return "No platforms are currently available."
     if len(names) == 1:
         return f"Right now we support {names[0]}."

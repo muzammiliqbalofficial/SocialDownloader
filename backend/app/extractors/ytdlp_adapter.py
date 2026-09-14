@@ -165,7 +165,7 @@ async def _run(args: list[str], *, timeout: int) -> tuple[int, bytes, bytes]:
         # Reap the child so it does not linger as a zombie.
         try:
             await asyncio.wait_for(process.wait(), timeout=5)
-        except TimeoutError:  # pragma: no cover - the kill above should suffice
+        except TimeoutError: # pragma: no cover - the kill above should suffice
             pass
         raise AppError(
             ErrorCode.UPSTREAM_TIMEOUT,
@@ -178,7 +178,7 @@ async def _run(args: list[str], *, timeout: int) -> tuple[int, bytes, bytes]:
 def _kill_process_group(process: asyncio.subprocess.Process) -> None:
     try:
         os.killpg(os.getpgid(process.pid), 9)
-    except (ProcessLookupError, PermissionError):  # pragma: no cover - already gone
+    except (ProcessLookupError, PermissionError): # pragma: no cover - already gone
         try:
             process.kill()
         except ProcessLookupError:
@@ -393,7 +393,7 @@ def _parse_upload_date(info: dict[str, Any]) -> date | None:
     if isinstance(timestamp, int | float):
         try:
             return datetime.fromtimestamp(timestamp).date()
-        except (OverflowError, OSError, ValueError):  # pragma: no cover - defensive
+        except (OverflowError, OSError, ValueError): # pragma: no cover - defensive
             return None
     return None
 
@@ -470,7 +470,7 @@ def ytdlp_version() -> str | None:
         from yt_dlp.version import __version__
 
         return __version__
-    except Exception:  # pragma: no cover - only if the dependency is broken
+    except Exception: # pragma: no cover - only if the dependency is broken
         return None
 
 

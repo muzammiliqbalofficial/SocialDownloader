@@ -1,7 +1,7 @@
 # Cloud Run service: API.
 #
 # Deploy with:
-#   gcloud run services replace deploy/cloudrun/api.service.yaml --region=$REGION
+# gcloud run services replace deploy/cloudrun/api.service.yaml --region=$REGION
 #
 # Every non-obvious value is justified in a comment. The memory and concurrency
 # figures are derived from a measured per-subprocess cost -- see the arithmetic
@@ -80,12 +80,12 @@ spec:
           resources:
             limits:
               # 2Gi. Worst case is roughly:
-              #   ~250 MiB  Python + FastAPI + SQLAlchemy + asyncpg baseline
-              #   ~320 MiB  4 concurrent yt-dlp subprocesses at ~80 MiB each
-              #             (45 MiB measured floor; 80 MiB budgeted for a
-              #             large format list)
-              #   ~128 MiB  4 stdout buffers at the 32 MiB parse cap
-              #   = ~700 MiB peak
+              # ~250 MiB Python + FastAPI + SQLAlchemy + asyncpg baseline
+              # ~320 MiB 4 concurrent yt-dlp subprocesses at ~80 MiB each
+              # (45 MiB measured floor; 80 MiB budgeted for a
+              # large format list)
+              # ~128 MiB 4 stdout buffers at the 32 MiB parse cap
+              # = ~700 MiB peak
               # 2Gi leaves ~2.8x headroom, which matters because Cloud Run
               # OOM-kills without warning and takes in-flight requests with it.
               # 1Gi is viable only with MAX_CONCURRENT_EXTRACTIONS reduced to 2.

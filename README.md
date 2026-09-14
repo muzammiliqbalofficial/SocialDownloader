@@ -7,9 +7,9 @@ resolution, subtitles, metadata, transcripts and AI summaries.
 The download itself is the commodity part. The extraction layer is the product.
 
 > **Status: Phase 2 of 8 (analyze pipeline).** URLs can be analyzed; nothing is
-> downloadable yet — the job queue and download endpoint land in Phase 3. See
+> downloadable yet - the job queue and download endpoint land in Phase 3. See
 > [Implementation status](#implementation-status) for what actually works today
-> — that section describes reality, not intent, and is updated at the end of
+> - that section describes reality, not intent, and is updated at the end of
 > each phase.
 
 **[`docs/BRIEF.md`](docs/BRIEF.md) is the source of truth** for requirements,
@@ -29,13 +29,13 @@ docker compose up --build
 
 That is the whole setup. It brings up five services:
 
-| Service    | URL                            | Purpose                              |
+| Service | URL | Purpose |
 | ---------- | ------------------------------ | ------------------------------------ |
-| `web`      | http://localhost:3000          | Next.js frontend                     |
-| `api`      | http://localhost:8000          | FastAPI backend                      |
-| `worker`   | —                              | arq job worker and the TTL sweeper   |
-| `postgres` | localhost:5432                 | Job records and aggregate counters   |
-| `redis`    | localhost:6379                 | Queue, rate limits, download tokens  |
+| `web` | http://localhost:3000 | Next.js frontend |
+| `api` | http://localhost:8000 | FastAPI backend |
+| `worker` | - | arq job worker and the TTL sweeper |
+| `postgres` | localhost:5432 | Job records and aggregate counters |
+| `redis` | localhost:6379 | Queue, rate limits, download tokens |
 
 Migrations run automatically in a one-shot `migrate` service before `api` and
 `worker` start, so there is no window where the app is up against an unmigrated
@@ -43,11 +43,11 @@ schema.
 
 Useful endpoints while developing:
 
-- http://localhost:8000/api/health — component-level status, including the
+- http://localhost:8000/api/health - component-level status, including the
   pinned yt-dlp version and whether ffmpeg is present
-- http://localhost:8000/api/registry — the capability matrix the UI renders from
-- http://localhost:8000/api/errors — the full error taxonomy
-- http://localhost:8000/docs — OpenAPI (disabled in production)
+- http://localhost:8000/api/registry - the capability matrix the UI renders from
+- http://localhost:8000/api/errors - the full error taxonomy
+- http://localhost:8000/docs - OpenAPI (disabled in production)
 
 Analyze a URL:
 
@@ -64,7 +64,7 @@ Run `make help` for the common tasks.
 ```bash
 cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/pytest                  # 103 tests, no services needed
+.venv/bin/pytest # 103 tests, no services needed
 .venv/bin/uvicorn app.main:app --reload
 ```
 
@@ -76,7 +76,7 @@ cd frontend && npm install && npm run dev
 
 ## Implementation status
 
-### Phase 1 — skeleton ✅
+### Phase 1 - skeleton 
 
 - `docker compose up` brings the full five-service stack online
 - Config via `pydantic-settings`, with production refusing to boot on a
@@ -89,7 +89,7 @@ cd frontend && npm install && npm run dev
 - TTL sweeper deleting expired scratch media every two minutes
 - 103 backend tests (89% coverage), CI on GitHub Actions
 
-### Phase 2 — analyze pipeline ✅
+### Phase 2 - analyze pipeline 
 
 - `POST /api/analyze` works end to end for YouTube (videos and Shorts):
   formats, thumbnails at every resolution, manual and auto-generated subtitle
@@ -106,26 +106,26 @@ cd frontend && npm install && npm run dev
 
 ### Not built yet
 
-Phases 3–8: the job queue and download pipeline, the frontend flow, platform
+Phases 3-8: the job queue and download pipeline, the frontend flow, platform
 expansion beyond YouTube, the remaining Tier 2 features, the AI layer, and the
-compliance pages. **Only YouTube is supported today** — the capability matrix
+compliance pages. **Only YouTube is supported today** - the capability matrix
 below is the target, not the current state.
 
 Frontend stack is Next.js 16 (App Router), React 19, Tailwind 4 and shadcn/ui,
-with TypeScript held at 5.9.x — see decision D-007 in the brief for why that
+with TypeScript held at 5.9.x - see decision D-007 in the brief for why that
 one is deliberately not the newest major.
 
 ### Target capability matrix
 
 Each row will be marked with what actually works as its phase lands.
 
-| Platform  | Video          | Audio | Thumbnail    | Post text          | Metadata | Notes                                            |
+| Platform | Video | Audio | Thumbnail | Post text | Metadata | Notes |
 | --------- | -------------- | ----- | ------------ | ------------------ | -------- | ------------------------------------------------ |
-| YouTube   | Planned        | ✓p    | ✓p (all res) | Description + chapters | Full  | Includes Shorts; subtitles including auto-generated |
-| Instagram | Planned        | ✓p    | ✓p           | Caption + hashtags | Partial  | Public reels/posts/carousels. Stories need cookies — best-effort |
-| Facebook  | Planned        | ✓p    | ✓p           | Post text          | Partial  | Public videos and reels only                     |
-| LinkedIn  | Planned        | ✓p    | ✓p           | Full post text     | Partial  | Native video only; **fragile** — `og:` tags first, Playwright fallback |
-| Snapchat  | Spotlight only | ✓p    | ✓p           | Limited            | Minimal  | Stories not reliably accessible; **ships disabled** behind an env var |
+| YouTube | Planned | ✓p | ✓p (all res) | Description + chapters | Full | Includes Shorts; subtitles including auto-generated |
+| Instagram | Planned | ✓p | ✓p | Caption + hashtags | Partial | Public reels/posts/carousels. Stories need cookies - best-effort |
+| Facebook | Planned | ✓p | ✓p | Post text | Partial | Public videos and reels only |
+| LinkedIn | Planned | ✓p | ✓p | Full post text | Partial | Native video only; **fragile** - `og:` tags first, Playwright fallback |
+| Snapchat | Spotlight only | ✓p | ✓p | Limited | Minimal | Stories not reliably accessible; **ships disabled** behind an env var |
 
 `✓p` = planned. Nothing in this table is implemented as of Phase 1. When
 Snapchat is disabled it is omitted from the capability registry entirely, so no
@@ -136,10 +136,10 @@ greyed-out or failing tab appears in the UI.
 ## Architecture
 
 ```
-Client → POST /api/analyze          metadata only, never downloads      (Phase 2)
-       → POST /api/jobs             queues async work, returns job_id   (Phase 3)
-       → GET  /api/jobs/{id}        polled until a terminal state       (Phase 3)
-       → GET  /api/download/{token} single-use, 15-minute TTL           (Phase 3)
+Client → POST /api/analyze metadata only, never downloads (Phase 2)
+       → POST /api/jobs queues async work, returns job_id (Phase 3)
+       → GET /api/jobs/{id} polled until a terminal state (Phase 3)
+       → GET /api/download/{token} single-use, 15-minute TTL (Phase 3)
 ```
 
 Decisions worth knowing before changing things:
@@ -161,9 +161,9 @@ Decisions worth knowing before changing things:
 The data model is deliberately unable to answer "what did this person
 download":
 
-- Source URLs are **never stored** — only a salted, truncated digest, for
+- Source URLs are **never stored** - only a salted, truncated digest, for
   deduplication
-- Client IPs are **never stored** — only a salted SHA-256
+- Client IPs are **never stored** - only a salted SHA-256
 - URLs are never logged at INFO; `redact_url` reduces them to host plus a short
   digest
 - `usage_daily` holds aggregate counters only, with no per-user dimension
@@ -179,17 +179,17 @@ stores an identifier in the clear.
 
 ```bash
 cd backend
-pytest                      # offline; database-backed tests skip
-pytest -m live              # opt-in canary against real URLs (expect breakage)
+pytest # offline; database-backed tests skip
+pytest -m live # opt-in canary against real URLs (expect breakage)
 pytest --cov --cov-report=term-missing
 ```
 
 Three layers, per the brief:
 
-- **Unit** — URL parsing, registry, error mapping. No network, no services.
-- **Integration** — extractors against recorded fixtures, so CI passes offline.
+- **Unit** - URL parsing, registry, error mapping. No network, no services.
+- **Integration** - extractors against recorded fixtures, so CI passes offline.
   Database tests run when `TEST_DATABASE_URL` is set (CI always sets it).
-- **Live** — marked `live` and excluded from CI. This is the canary for
+- **Live** - marked `live` and excluded from CI. This is the canary for
   platform breakage and is *expected* to fail periodically.
 
 A weekly scheduled workflow (`.github/workflows/ytdlp-canary.yml`) bumps
@@ -252,22 +252,22 @@ constraints above reduce risk; they do not eliminate it.
 
 ```
 docs/
-  BRIEF.md        requirements, decisions and the decision log
+  BRIEF.md requirements, decisions and the decision log
 backend/
   app/
-    api/          routes: health, errors (analyze, jobs, download to come)
-    core/         logging, errors, middleware, security, redis
-    models/       ORM models, session management, pydantic schemas
-    workers/      arq worker settings and tasks
-    platforms/    capability registry and per-platform modules  (Phase 2)
-    extractors/   yt-dlp, gallery-dl and HTML adapters          (Phase 2)
-    services/     transcription, summarizer, media ops, storage (Phase 3+)
-  alembic/        migrations
-  scripts/        gen_error_codes.py
+    api/ routes: health, errors (analyze, jobs, download to come)
+    core/ logging, errors, middleware, security, redis
+    models/ ORM models, session management, pydantic schemas
+    workers/ arq worker settings and tasks
+    platforms/ capability registry and per-platform modules (Phase 2)
+    extractors/ yt-dlp, gallery-dl and HTML adapters (Phase 2)
+    services/ transcription, summarizer, media ops, storage (Phase 3+)
+  alembic/ migrations
+  scripts/ gen_error_codes.py
   tests/
 frontend/
-  app/            App Router pages
-  lib/            api client, generated error catalog
-  components/     shadcn/ui components                          (Phase 4)
-  hooks/                                                        (Phase 4)
+  app/ App Router pages
+  lib/ api client, generated error catalog
+  components/ shadcn/ui components (Phase 4)
+  hooks/ (Phase 4)
 ```
